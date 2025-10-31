@@ -29,19 +29,19 @@ final class Game {
     // Computed properties for front 9, back 9, and total
     var front9Scores: [(player: Player, gross: Int, net: Int)] {
         let front9 = holesScores.filter { $0.holeNumber <= 9 }
-        return calculateScores(holesScores: front9)
+        return calculateScores(holesScores: front9, useHalfHandicap: true)
     }
     
     var back9Scores: [(player: Player, gross: Int, net: Int)] {
         let back9 = holesScores.filter { $0.holeNumber > 9 }
-        return calculateScores(holesScores: back9)
+        return calculateScores(holesScores: back9, useHalfHandicap: true)
     }
     
     var totalScores: [(player: Player, gross: Int, net: Int)] {
-        return calculateScores(holesScores: holesScores)
+        return calculateScores(holesScores: holesScores, useHalfHandicap: false)
     }
     
-    private func calculateScores(holesScores: [HoleScore]) -> [(player: Player, gross: Int, net: Int)] {
+    private func calculateScores(holesScores: [HoleScore], useHalfHandicap: Bool = false) -> [(player: Player, gross: Int, net: Int)] {
         var playerTotals: [UUID: Int] = [:]
         
         for holeScore in holesScores {
@@ -55,7 +55,8 @@ final class Game {
         return players.map { player in
             let gross = playerTotals[player.id] ?? 0
             let handicap = Int(player.handicap)
-            let net = max(0, gross - handicap)
+            let effectiveHandicap = useHalfHandicap ? handicap / 2 : handicap
+            let net = max(0, gross - effectiveHandicap)
             return (player: player, gross: gross, net: net)
         }
     }
