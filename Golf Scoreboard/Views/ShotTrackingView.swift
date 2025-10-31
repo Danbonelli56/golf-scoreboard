@@ -333,6 +333,12 @@ struct ShotTrackingView: View {
         if isShort { print("⛳ Detected SHORT putt modifier") }
         if isPutt { print("⛳ Detected PUTT") }
         
+        // If we detected a putt but no club was specified, default to Putter
+        if isPutt && club == nil {
+            club = "Putter"
+            print("✅ Setting club to Putter (putt detected)")
+        }
+        
         // Update shot with extracted information (only set if we found values)
         if let player = targetPlayer {
             shot.player = player
