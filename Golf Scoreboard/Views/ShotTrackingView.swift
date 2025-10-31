@@ -535,6 +535,18 @@ struct ShotTrackingView: View {
     
     private func finalizeHoleScore(for player: Player, on holeNumber: Int, shotsCount: Int) {
         guard let game = selectedGame else { return }
+        
+        // Find the last shot for this hole and set distanceTraveled to 0 if it's a putt
+        let playerShots = allShots.filter { 
+            $0.player?.id == player.id && 
+            $0.holeNumber == holeNumber 
+        }.sorted { $0.shotNumber < $1.shotNumber }
+        
+        if let lastShot = playerShots.last, lastShot.isPutt, lastShot.distanceTraveled == nil {
+            lastShot.distanceTraveled = 0
+            print("✅ Set final putt distanceTraveled to 0 (holed)")
+        }
+        
         // Update or create HoleScore for this hole
         if let existingHole = game.holesScores.first(where: { $0.holeNumber == holeNumber }) {
             existingHole.scores[player.id] = shotsCount
