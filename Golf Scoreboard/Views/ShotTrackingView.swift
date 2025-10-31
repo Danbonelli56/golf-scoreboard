@@ -14,8 +14,22 @@ struct ShotTrackingView: View {
     @Query private var allShots: [Shot]
     
     @AppStorage("selectedGameID") private var selectedGameIDString: String = ""
-    @AppStorage("currentHole") private var currentHole: Int = 1
+    @AppStorage("currentHole") private var _currentHole: Int = 1
     @State private var selectedPlayer: Player?
+    
+    // Validated current hole (1-18)
+    private var currentHole: Int {
+        get {
+            // Clamp to valid range
+            if _currentHole < 1 { return 1 }
+            if _currentHole > 18 { return 18 }
+            return _currentHole
+        }
+        set {
+            // Clamp to valid range before saving
+            _currentHole = min(max(newValue, 1), 18)
+        }
+    }
     @State private var lastShotPlayer: Player?
     @State private var showingShotEntry = false
     @State private var inputText = ""
@@ -108,6 +122,11 @@ struct ShotTrackingView: View {
                 // Automatically select the most recent game when the view appears
                 if selectedGame == nil, let recentGame = games.sorted(by: { $0.date > $1.date }).first {
                     _selectedGameIDString.wrappedValue = recentGame.id.uuidString
+                }
+                // Validate and clamp currentHole to valid range (1-18)
+                if _currentHole < 1 || _currentHole > 18 {
+                    _currentHole = 1
+                    print("⚠️ Invalid currentHole detected, resetting to 1")
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .shotsUpdated)) { _ in
