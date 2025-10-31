@@ -127,18 +127,37 @@ struct HoleRow: View {
     let hole: Hole
     
     var body: some View {
-        HStack {
-            Text("Hole \(hole.holeNumber)")
-                .fontWeight(.medium)
-            
-            Spacer()
-            
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("Par: \(hole.par)")
-                Text("HCP: \(hole.mensHandicap)")
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text("Hole \(hole.holeNumber)")
+                    .fontWeight(.medium)
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Par: \(hole.par)")
+                    Text("HCP: \(hole.mensHandicap)")
+                }
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
-            .font(.caption)
-            .foregroundColor(.secondary)
+            
+            // Display tee distances
+            if !hole.teeDistances.isEmpty {
+                HStack(spacing: 12) {
+                    ForEach(hole.teeDistances.sorted(by: { $0.teeColor < $1.teeColor }), id: \.teeColor) { tee in
+                        HStack(spacing: 4) {
+                            Text(tee.teeColor.capitalized)
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                            Text("\(tee.distanceYards)yds")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
         }
     }
 }
