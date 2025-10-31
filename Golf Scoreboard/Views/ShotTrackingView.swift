@@ -160,7 +160,6 @@ struct ShotTrackingView: View {
         parseIntoPendingShot(text: text, into: &currentShot, game: game)
         
         // Check if "on green" was mentioned - next shot should be a putt
-        let lowerText = text.lowercased()
         if lowerText.contains("on the green") || lowerText.contains("on green") {
             nextShotIsPutt = true
             print("⛳ Flagged next shot as putt (on green)")
