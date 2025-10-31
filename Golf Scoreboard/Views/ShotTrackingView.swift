@@ -790,7 +790,26 @@ struct ShotRow: View {
                     .foregroundColor(.secondary)
                     .italic()
             } else if shot.isPutt {
-                if let originalFeet = shot.originalDistanceFeet {
+                if let traveled = shot.distanceTraveled, traveled == 0 {
+                    // Holed putt - no "to hole" prefix
+                    if let originalFeet = shot.originalDistanceFeet {
+                        Text("\(originalFeet)ft")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .italic()
+                    } else if let remaining = shot.distanceToHole {
+                        let feet = remaining * 3
+                        Text("\(feet)ft")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .italic()
+                    } else {
+                        Text("...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .italic()
+                    }
+                } else if let originalFeet = shot.originalDistanceFeet {
                     Text("to hole \(originalFeet)ft")
                         .font(.caption)
                         .foregroundColor(.secondary)
