@@ -226,8 +226,9 @@ struct ShotTrackingView: View {
         }
         
         // Extract hole number (optional - defaults to current hole)
+        // Match "hole 7" but not "7 iron" - require word boundary after number
         var holeNum = currentHole
-        if let holePattern = try? NSRegularExpression(pattern: "hole\\s+(\\d+)", options: .caseInsensitive),
+        if let holePattern = try? NSRegularExpression(pattern: "\\bhole\\s+(\\d+)\\b", options: .caseInsensitive),
            let holeMatch = holePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
            let holeRange = Range(holeMatch.range(at: 1), in: lowerText),
            let extractedHole = Int(String(lowerText[holeRange])) {
@@ -285,8 +286,8 @@ struct ShotTrackingView: View {
             distance = yards
             print("✅ Found distance (feet): \(feet)ft -> ~\(yards)yds")
         }
-        // Pattern 3: "to (the) hole 228"
-        if distance == nil, let toHolePattern = try? NSRegularExpression(pattern: "to\\s+(?:the\\s+)?hole\\s+(\\d+)", options: .caseInsensitive),
+        // Pattern 3: "to (the) hole 228" - distance to hole
+        if distance == nil, let toHolePattern = try? NSRegularExpression(pattern: "to\\s+(?:the\\s+)?hole\\s+(\\d+)\\s*(?:yards?|yds?)?", options: .caseInsensitive),
            let match = toHolePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
            let distRange = Range(match.range(at: 1), in: lowerText) {
             distance = Int(String(lowerText[distRange]))
