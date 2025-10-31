@@ -54,9 +54,8 @@ final class Game {
         
         return players.map { player in
             let gross = playerTotals[player.id] ?? 0
-            let handicap = Int(player.handicap)
-            let effectiveHandicap = useHalfHandicap ? handicap / 2 : handicap
-            let net = max(0, gross - effectiveHandicap)
+            let effectiveHandicap = useHalfHandicap ? player.handicap / 2.0 : player.handicap
+            let net = max(0, gross - Int(round(effectiveHandicap)))
             return (player: player, gross: gross, net: net)
         }
     }
