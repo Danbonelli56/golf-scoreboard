@@ -242,6 +242,40 @@ struct ShotTrackingView: View {
             }
         }
         
+        // Extract distance BEFORE hole number to avoid conflicts
+        var distance: Int? = nil // remaining distance to hole in yards
+        var distanceFeet: Int? = nil // remaining distance in feet (for putts)
+        // Pattern 1: "228 yards"
+        if let distancePattern = try? NSRegularExpression(pattern: "(\\d+)\\s*yards?", options: .caseInsensitive),
+           let match = distancePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+           let distRange = Range(match.range(at: 1), in: lowerText) {
+            distance = Int(String(lowerText[distRange]))
+            print("✅ Found distance: \(distance!)")
+        }
+        // Pattern 2: feet for putts ("10 feet", "12 ft")
+        if distance == nil, let feetPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(feet|foot|ft)", options: .caseInsensitive),
+           let match = feetPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+           let feetRange = Range(match.range(at: 1), in: lowerText),
+           let feet = Int(String(lowerText[feetRange])) {
+            distanceFeet = feet
+            // Store internally as yards (rounded)
+            let yards = Int(round(Double(feet) / 3.0))
+            distance = yards
+            print("✅ Found distance (feet): \(feet)ft -> ~\(yards)yds")
+        }
+        // Pattern 3: "228 to hole" or "to hole 228" - distance to hole
+        if distance == nil, let toHolePattern = try? NSRegularExpression(pattern: "(\\d+)\\s+to\\s+(?:the\\s+)?hole|to\\s+(?:the\\s+)?hole\\s+(\\d+)\\s*(?:yards?|yds?)?", options: .caseInsensitive),
+           let match = toHolePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)) {
+            // Check if first capture group matched
+            if match.numberOfRanges > 1, let distRange1 = Range(match.range(at: 1), in: lowerText), !distRange1.isEmpty {
+                distance = Int(String(lowerText[distRange1]))
+                print("✅ Found distance (to hole): \(distance!)")
+            } else if match.numberOfRanges > 2, let distRange2 = Range(match.range(at: 2), in: lowerText), !distRange2.isEmpty {
+                distance = Int(String(lowerText[distRange2]))
+                print("✅ Found distance (to hole): \(distance!)")
+            }
+        }
+        
         // Extract hole number (optional - defaults to current hole)
         // Match "hole 7" but not "7 iron" - require word boundary after number
         // Also check that hole number is in valid range (1-18)
@@ -282,35 +316,6 @@ struct ShotTrackingView: View {
                 print("✅ Found club: \(label)")
                 break
             }
-        }
-        
-        // Extract distance
-        var distance: Int? = nil // remaining distance to hole in yards
-        var distanceFeet: Int? = nil // remaining distance in feet (for putts)
-        // Pattern 1: "228 yards"
-        if let distancePattern = try? NSRegularExpression(pattern: "(\\d+)\\s*yards?", options: .caseInsensitive),
-           let match = distancePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
-           let distRange = Range(match.range(at: 1), in: lowerText) {
-            distance = Int(String(lowerText[distRange]))
-            print("✅ Found distance: \(distance!)")
-        }
-        // Pattern 2: feet for putts ("10 feet", "12 ft")
-        if distance == nil, let feetPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(feet|foot|ft)", options: .caseInsensitive),
-           let match = feetPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
-           let feetRange = Range(match.range(at: 1), in: lowerText),
-           let feet = Int(String(lowerText[feetRange])) {
-            distanceFeet = feet
-            // Store internally as yards (rounded)
-            let yards = Int(round(Double(feet) / 3.0))
-            distance = yards
-            print("✅ Found distance (feet): \(feet)ft -> ~\(yards)yds")
-        }
-        // Pattern 3: "to (the) hole 228" - distance to hole
-        if distance == nil, let toHolePattern = try? NSRegularExpression(pattern: "to\\s+(?:the\\s+)?hole\\s+(\\d+)\\s*(?:yards?|yds?)?", options: .caseInsensitive),
-           let match = toHolePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
-           let distRange = Range(match.range(at: 1), in: lowerText) {
-            distance = Int(String(lowerText[distRange]))
-            print("✅ Found distance (to hole): \(distance!)")
         }
         
         // Extract result with enhanced natural language parsing
