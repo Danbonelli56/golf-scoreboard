@@ -443,13 +443,13 @@ struct ShotTrackingView: View {
             if pending.isPutt, let feet = pending.distanceFeet {
                 let yardsFromFeet = Double(feet) / 3.0
                 if pending.isLong {
-                    // Ball went past the hole - previous shot traveled MORE
-                    effectiveCurrent = Double(currRemaining) + yardsFromFeet
-                    print("⛳ Putt was \(feet)ft long, previous shot was \(String(format: "%.1f", yardsFromFeet))yds longer.")
+                    // Ball went past the hole - previous shot traveled MORE (went yardsFromFeet beyond hole)
+                    effectiveCurrent = yardsFromFeet
+                    print("⛳ Putt was \(feet)ft long, previous shot was \(String(format: "%.1f", yardsFromFeet))yds beyond the hole.")
                 } else if pending.isShort {
-                    // Ball stopped short - previous shot traveled LESS
-                    effectiveCurrent = Double(currRemaining) - yardsFromFeet
-                    print("⛳ Putt was \(feet)ft short, previous shot was \(String(format: "%.1f", yardsFromFeet))yds shorter.")
+                    // Ball stopped short - previous shot traveled LESS (stopped yardsFromFeet short of hole)
+                    effectiveCurrent = -yardsFromFeet
+                    print("⛳ Putt was \(feet)ft short, previous shot was \(String(format: "%.1f", yardsFromFeet))yds short of the hole.")
                 } else {
                     print("⛳ No long/short modifier for \(feet)ft putt")
                 }
