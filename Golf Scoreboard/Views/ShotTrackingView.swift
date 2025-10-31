@@ -244,11 +244,13 @@ struct ShotTrackingView: View {
         
         // Extract hole number (optional - defaults to current hole)
         // Match "hole 7" but not "7 iron" - require word boundary after number
+        // Also check that hole number is in valid range (1-18)
         var holeNum = currentHole
         if let holePattern = try? NSRegularExpression(pattern: "\\bhole\\s+(\\d+)\\b", options: .caseInsensitive),
            let holeMatch = holePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
            let holeRange = Range(holeMatch.range(at: 1), in: lowerText),
-           let extractedHole = Int(String(lowerText[holeRange])) {
+           let extractedHole = Int(String(lowerText[holeRange])),
+           extractedHole >= 1 && extractedHole <= 18 {
             holeNum = extractedHole
             print("✅ Found hole: \(holeNum)")
             // Update the current hole to match
