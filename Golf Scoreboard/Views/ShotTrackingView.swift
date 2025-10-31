@@ -323,11 +323,18 @@ struct ShotTrackingView: View {
         
         // Determine if it's a putt with enhanced detection
         // "on the green" means the ball is on the green, so the next shot will be a putt
-        let isPutt = lowerText.contains("putt") || lowerText.contains("putting") || lowerText.contains(" put ") || club?.lowercased() == "putter" || lowerText.contains("on the green") || lowerText.contains("on green")
+        // Also if distance is in feet, it's likely a putt
+        var isPutt = lowerText.contains("putt") || lowerText.contains("putting") || lowerText.contains(" put ") || club?.lowercased() == "putter" || lowerText.contains("on the green") || lowerText.contains("on green")
         
         // Putt modifiers
         let isLong = lowerText.contains("long") || lowerText.contains("over the pin") || lowerText.contains("over the green") || lowerText.contains("back of the green")
         let isShort = lowerText.contains("short") || lowerText.contains("short of the pin") || lowerText.contains("short of the green")
+        
+        // If distance was specified in feet (not yards), it's a putt
+        if distanceFeet != nil && !isPutt {
+            isPutt = true
+            print("✅ Detected PUTT (distance in feet)")
+        }
         
         if isLong { print("⛳ Detected LONG putt modifier") }
         if isShort { print("⛳ Detected SHORT putt modifier") }
