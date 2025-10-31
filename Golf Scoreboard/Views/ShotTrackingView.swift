@@ -165,8 +165,8 @@ struct ShotTrackingView: View {
         guard shot.player != nil else { return false }
         
         // Check if we have enough information to save:
-        // Need (club AND result) OR distance (any shot with distance info is complete)
-        return (shot.club != nil && shot.result != nil) || shot.distance != nil
+        // Need (club AND result) OR distance OR (club AND isPutt) - putts are special case
+        return (shot.club != nil && shot.result != nil) || shot.distance != nil || (shot.club != nil && shot.isPutt)
     }
     
     private func parseIntoPendingShot(text: String, into shot: inout PendingShot, game: Game) {
