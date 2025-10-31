@@ -21,6 +21,7 @@ struct ShotTrackingView: View {
     @State private var inputText = ""
     @State private var listening = false
     @State private var needsCleanup = false
+    @State private var nextShotIsPutt = false // Flag to mark next shot as putt
     
     // Shot builder to accumulate information across multiple voice inputs
     struct PendingShot {
@@ -145,8 +146,25 @@ struct ShotTrackingView: View {
             print("📝 Starting new shot")
         }
         
+        // Apply nextShotIsPutt flag if it was set from previous shot
+        if nextShotIsPutt {
+            currentShot.isPutt = true
+            if currentShot.club == nil {
+                currentShot.club = "Putter"
+                print("✅ Setting club to Putter (next shot is putt)")
+            }
+            nextShotIsPutt = false // Clear the flag after using it
+        }
+        
         // Parse this input and accumulate info
         parseIntoPendingShot(text: text, into: &currentShot, game: game)
+        
+        // Check if "on green" was mentioned - next shot should be a putt
+        let lowerText = text.lowercased()
+        if lowerText.contains("on the green") || lowerText.contains("on green") {
+            nextShotIsPutt = true
+            print("⛳ Flagged next shot as putt (on green)")
+        }
         
         // Update pending shot
         pendingShot = currentShot
@@ -297,7 +315,7 @@ struct ShotTrackingView: View {
         // Extract result with enhanced natural language parsing
         var result: ShotResult = .straight
         var hasExplicitResult = false
-        if lowerText.contains("straight") || lowerText.contains("center") || lowerText.contains("on the green") {
+        if lowerText.contains("straight") || lowerText.contains("center") || lowerText.contains("on the green") || lowerText.contains("on green") {
             result = .straight
             hasExplicitResult = true
         } else if lowerText.contains("right") || lowerText.contains("down the right") || lowerText.contains("to the right") {
