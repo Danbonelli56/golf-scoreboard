@@ -139,7 +139,10 @@ struct AddShotView: View {
             originalDistanceFeet: isPutt ? puttFeetValue : nil,
             club: club,
             result: selectedResult,
-            isPutt: isPutt
+            isPutt: isPutt,
+            distanceTraveled: nil,
+            isPenalty: false,
+            isRetaking: false
         )
         
         // Associate the shot with the current game

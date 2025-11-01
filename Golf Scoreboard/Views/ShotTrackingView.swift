@@ -34,6 +34,8 @@ struct ShotTrackingView: View {
         var isPutt: Bool = false
         var isLong: Bool = false
         var isShort: Bool = false
+        var isPenalty: Bool = false
+        var isRetaking: Bool = false // true if retaking from tee (vs taking a drop)
         
         var hasEssentialInfo: Bool { player != nil && (club != nil || result != nil) }
     }
@@ -176,7 +178,7 @@ struct ShotTrackingView: View {
         // If we have enough info to save, do so
         if shouldSaveShot(currentShot) {
             print("💾 Shot is complete, saving...")
-            savePendingShot(currentShot, game: game)
+            savePendingShot(&currentShot, game: game)
             pendingShot = nil // Reset for next shot
         } else {
             print("⏳ Waiting for more info (club: \(currentShot.club != nil), result: \(currentShot.result != nil), distance: \(currentShot.distance != nil))")
@@ -187,8 +189,14 @@ struct ShotTrackingView: View {
         guard shot.player != nil else { return false }
         
         // Check if we have enough information to save:
-        // Need (club AND result) OR distance OR (club AND isPutt) - putts are special case
-        return (shot.club != nil && shot.result != nil) || shot.distance != nil || (shot.club != nil && shot.isPutt)
+        // Need club OR (isPutt and distance) - putts are special case (club auto-assigned)
+        // For non-putts: must have club AND (result OR distance)
+        // For putts: can have just distance (club auto-assigned to Putter)
+        if shot.isPutt {
+            return shot.distance != nil || shot.distanceFeet != nil || shot.result != nil
+        } else {
+            return shot.club != nil && (shot.result != nil || shot.distance != nil)
+        }
     }
     
     private func parseIntoPendingShot(text: String, into shot: inout PendingShot, game: Game) {
@@ -284,16 +292,28 @@ struct ShotTrackingView: View {
         // Extract hole number (optional - defaults to current hole)
         // Match "hole 7" but not "7 iron" - require word boundary after number
         // Also check that hole number is in valid range (1-18)
+        // IMPORTANT: Don't match if this appears to be part of a "to hole X" distance phrase
         var holeNum = currentHole
         if let holePattern = try? NSRegularExpression(pattern: "\\bhole\\s+(\\d+)\\b", options: .caseInsensitive),
            let holeMatch = holePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
            let holeRange = Range(holeMatch.range(at: 1), in: lowerText),
            let extractedHole = Int(String(lowerText[holeRange])),
            extractedHole >= 1 && extractedHole <= 18 {
-            holeNum = extractedHole
-            print("✅ Found hole: \(holeNum)")
-            // Update the current hole to match
-            currentHole = holeNum
+            // Check if this is part of "to hole X" pattern - if so, ignore it
+            let matchRange = holeMatch.range
+            let startIndex = lowerText.index(lowerText.startIndex, offsetBy: max(0, matchRange.location - 20))
+            let endIndex = lowerText.index(lowerText.startIndex, offsetBy: min(lowerText.count, matchRange.location + matchRange.length + 20))
+            let context = String(lowerText[startIndex..<endIndex])
+            
+            // If we see "to hole" nearby, this is likely a distance phrase, not a hole number
+            if !context.contains("to hole") && !context.contains("hole to") {
+                holeNum = extractedHole
+                print("✅ Found hole: \(holeNum)")
+                // Update the current hole to match
+                currentHole = holeNum
+            } else {
+                print("📍 Ignoring 'hole X' as it appears to be part of a distance phrase")
+            }
         } else {
             print("📍 No hole specified, using current hole: \(holeNum)")
         }
@@ -338,7 +358,7 @@ struct ShotTrackingView: View {
         } else if lowerText.contains("out of bounds") || lowerText.contains("o b") || lowerText.contains("ob ") {
             result = .outOfBounds
             hasExplicitResult = true
-        } else if lowerText.contains("hazard") || lowerText.contains("water") || lowerText.contains("taking a drop") || lowerText.contains("dropping") {
+        } else if lowerText.contains("hazard") || lowerText.contains("water") {
             result = .hazard
             hasExplicitResult = true
         } else if lowerText.contains("trap") || lowerText.contains("sand") || lowerText.contains("bunker") {
@@ -358,6 +378,22 @@ struct ShotTrackingView: View {
         let isLong = lowerText.contains("long") || lowerText.contains("over the pin") || lowerText.contains("over the green") || lowerText.contains("back of the green")
         let isShort = lowerText.contains("short") || lowerText.contains("short of the pin") || lowerText.contains("short of the green")
         
+        // Detect penalties and retaking
+        var isPenalty = result == .outOfBounds || result == .hazard
+        var isRetaking = false
+        
+        if isPenalty {
+            // Check if this is a retaking from tee (driver or tee mentioned)
+            if lowerText.contains("retee") || lowerText.contains("re tee") || lowerText.contains("hitting from") || lowerText.contains("tee off") || 
+               lowerText.contains("driver") || club?.lowercased() == "driver" || lowerText.contains("from the tee") {
+                isRetaking = true
+                print("⛳ Detected RETAKING from tee after penalty")
+            } else {
+                // Taking a drop - shot number increments normally
+                print("⛳ Detected DROP after penalty")
+            }
+        }
+        
         // If distance was specified in feet (not yards), it's a putt
         if distanceFeet != nil && !isPutt {
             isPutt = true
@@ -367,6 +403,7 @@ struct ShotTrackingView: View {
         if isLong { print("⛳ Detected LONG putt modifier") }
         if isShort { print("⛳ Detected SHORT putt modifier") }
         if isPutt { print("⛳ Detected PUTT") }
+        if isPenalty { print("⛳ Detected PENALTY shot") }
         
         // If we detected a putt, default to Putter
         if isPutt && club == nil {
@@ -399,12 +436,16 @@ struct ShotTrackingView: View {
         if isShort {
             shot.isShort = true
         }
+        // Note: isPenalty is NOT set here - it's set in savePendingShot based on the previous shot
+        if isRetaking {
+            shot.isRetaking = true
+        }
         if holeNum != currentHole {
             shot.holeNumber = holeNum
         }
     }
     
-    private func savePendingShot(_ pending: PendingShot, game: Game) {
+    private func savePendingShot(_ pending: inout PendingShot, game: Game) {
         guard let player = pending.player else {
             print("❌ Cannot save shot without player")
             return
@@ -418,7 +459,32 @@ struct ShotTrackingView: View {
             $0.holeNumber == holeNum 
         }.sorted { $0.shotNumber < $1.shotNumber }
         
-        let shotNum = (previousShots.last?.shotNumber ?? 0) + 1
+        var shotNum = (previousShots.last?.shotNumber ?? 0) + 1
+        
+        // Check if previous shot resulted in a penalty and adjust shot number
+        if shotNum > 1, let prev = previousShots.last {
+            var penaltyStrokes = 0
+            
+            if prev.result == "In a Hazard" && !prev.isPenalty {
+                // Hazard: 1 stroke penalty
+                penaltyStrokes = 1
+                prev.isPenalty = true
+                print("🏌️ Previous shot went into HAZARD - adding 1 stroke penalty")
+            } else if prev.result == "Out of Bounds" && !prev.isPenalty {
+                // Out of bounds: 2 stroke penalty
+                penaltyStrokes = 2
+                prev.isPenalty = true
+                print("🏌️ Previous shot went OUT OF BOUNDS - adding 2 stroke penalty")
+            }
+            
+            // Adjust shot number based on penalty
+            if penaltyStrokes > 0 {
+                shotNum += penaltyStrokes
+                // Mark this as a penalty stroke
+                pending.isPenalty = true
+                print("🏌️ Adjusted shot number to \(shotNum) due to penalty")
+            }
+        }
         
         // If this is shot #1 and no distance provided, use hole length
         var shotDistance = pending.distance
@@ -435,7 +501,35 @@ struct ShotTrackingView: View {
             }
         }
         
-        // Calculate previous shot's distance traveled if applicable
+        // Handle putt modifiers: update previous putt's distance if this is a short/long putt
+        // Note: Use previousShots before penalty adjustment for getting the actual previous shot
+        if shotNum > 1, let prev = previousShots.last, prev.isPutt, pending.isPutt {
+            if pending.isShort || pending.isLong {
+                // This is a follow-up putt with a modifier - update the previous putt's distance
+                if let prevFeet = prev.originalDistanceFeet, let currentFeet = pending.distanceFeet {
+                    var newPrevFeet = prevFeet
+                    if pending.isShort {
+                        // Ball stopped short: previous putt was current feet SHORTER than it landed
+                        // Example: "10 feet" then "1 foot short" means previous was actually 9 feet
+                        newPrevFeet = prevFeet - currentFeet
+                        print("⛳ Putt was \(currentFeet)ft short. Updating previous putt from \(prevFeet)ft to \(newPrevFeet)ft")
+                    } else if pending.isLong {
+                        // Ball went long: previous putt was current feet LONGER than it landed
+                        // Example: "10 feet" then "2 feet long" means previous was actually 12 feet
+                        newPrevFeet = prevFeet + currentFeet
+                        print("⛳ Putt was \(currentFeet)ft long. Updating previous putt from \(prevFeet)ft to \(newPrevFeet)ft")
+                    }
+                    
+                    // Update previous putt's distance
+                    if newPrevFeet > 0 {
+                        prev.originalDistanceFeet = newPrevFeet
+                        prev.distanceToHole = Int(round(Double(newPrevFeet) / 3.0))
+                    }
+                }
+            }
+        }
+        
+        // Calculate previous non-putt shot's distance traveled if applicable
         if shotNum > 1, let prev = previousShots.last, let prevRemaining = prev.distanceToHole, let currRemaining = shotDistance, !prev.isPutt {
             var effectiveCurrent = Double(currRemaining)
             
@@ -444,14 +538,28 @@ struct ShotTrackingView: View {
                 let yardsFromFeet = Double(feet) / 3.0
                 if pending.isLong {
                     // Ball went past the hole - previous shot traveled MORE (went yardsFromFeet beyond hole)
-                    effectiveCurrent = yardsFromFeet
+                    // If went 10ft past hole, ball ended 0yds (at hole) minus the overshoot
+                    effectiveCurrent = -yardsFromFeet
                     print("⛳ Putt was \(feet)ft long, previous shot was \(String(format: "%.1f", yardsFromFeet))yds beyond the hole.")
                 } else if pending.isShort {
                     // Ball stopped short - previous shot traveled LESS (stopped yardsFromFeet short of hole)
-                    effectiveCurrent = -yardsFromFeet
+                    // If stopped 10ft short of hole, add that distance
+                    effectiveCurrent = yardsFromFeet
                     print("⛳ Putt was \(feet)ft short, previous shot was \(String(format: "%.1f", yardsFromFeet))yds short of the hole.")
                 } else {
                     print("⛳ No long/short modifier for \(feet)ft putt")
+                }
+            }
+            
+            // Adjust for non-putt long/short modifiers (e.g., "7 iron left and long")
+            if !pending.isPutt && (pending.isLong || pending.isShort) {
+                // For non-putt shots with long/short, use the distance provided in the current shot
+                // This handles cases like "7 iron left and long to hole 50 yards"
+                // The adjustment is implicit in the distance to hole measurement
+                if pending.isLong {
+                    print("⏫ Shot went long: previous shot traveled beyond initial estimate")
+                } else if pending.isShort {
+                    print("⏬ Shot came short: previous shot didn't travel as far as estimated")
                 }
             }
             
@@ -470,7 +578,9 @@ struct ShotTrackingView: View {
             club: pending.club,
             result: pending.result ?? .straight,
             isPutt: pending.isPutt,
-            distanceTraveled: nil // Will be calculated after next shot
+            distanceTraveled: nil, // Will be calculated after next shot
+            isPenalty: pending.isPenalty,
+            isRetaking: pending.isRetaking
         )
         
         newShot.game = game

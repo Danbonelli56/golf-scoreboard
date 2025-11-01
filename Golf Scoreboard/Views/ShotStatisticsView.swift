@@ -60,32 +60,71 @@ struct ShotStatisticsView: View {
 struct ClubStatsRow: View {
     let stats: ClubStatistics
     
+    private var straightCount: Int { stats.shotsByResult["Straight"] ?? 0 }
+    private var leftCount: Int { stats.shotsByResult["Left"] ?? 0 }
+    private var rightCount: Int { stats.shotsByResult["Right"] ?? 0 }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(stats.club)
                 .font(.headline)
             
-            HStack {
-                Text("Avg:")
-                Text("\(Int(stats.averageDistance)) yds")
-                    .foregroundColor(.blue)
-                    .fontWeight(.semibold)
-                
-                Text("|")
-                    .foregroundColor(.secondary)
-                
-                Text("Range:")
-                Text("\(stats.minDistance)-\(stats.maxDistance) yds")
-                    .foregroundColor(.green)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                Text("\(stats.totalShots) shots")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
+            // Distance stats (if available)
+            if stats.averageDistance > 0 {
+                HStack {
+                    Text("Avg:")
+                    Text("\(Int(stats.averageDistance)) yds")
+                        .foregroundColor(.blue)
+                        .fontWeight(.semibold)
+                    
+                    Text("|")
+                        .foregroundColor(.secondary)
+                    
+                    Text("Range:")
+                    Text("\(stats.minDistance)-\(stats.maxDistance) yds")
+                        .foregroundColor(.green)
+                        .fontWeight(.semibold)
+                    
+                    Spacer()
+                    
+                    Text("\(stats.totalShots) shots")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+                .font(.caption)
+            } else {
+                // Show total shots count even when no distance data
+                HStack {
+                    Text("\(stats.totalShots) shots")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                    
+                    Spacer()
+                }
             }
-            .font(.caption)
+            
+            // Shot direction breakdown
+            if !stats.shotsByResult.isEmpty {
+                HStack(spacing: 12) {
+                    if straightCount > 0 {
+                        Label("\(straightCount)", systemImage: "arrow.up")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                    if leftCount > 0 {
+                        Label("\(leftCount)", systemImage: "arrow.left")
+                            .font(.caption)
+                            .foregroundColor(.red)
+                    }
+                    if rightCount > 0 {
+                        Label("\(rightCount)", systemImage: "arrow.right")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    
+                    Spacer()
+                }
+            }
         }
         .padding(.vertical, 4)
     }

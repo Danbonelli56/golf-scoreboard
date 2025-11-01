@@ -10,30 +10,38 @@ import Foundation
 // Statistics for a specific club
 struct ClubStatistics {
     var club: String
-    var totalShots: Int
     var averageDistance: Double
     var minDistance: Int
     var maxDistance: Int
     var distances: [Int]
+    var shotsByResult: [String: Int]
+    
+    var totalShots: Int {
+        shotsByResult.values.reduce(0, +)
+    }
     
     init(club: String) {
         self.club = club
-        self.totalShots = 0
         self.averageDistance = 0.0
         self.minDistance = 0
         self.maxDistance = 0
         self.distances = []
+        self.shotsByResult = [:]
     }
     
     mutating func addDistance(_ distance: Int) {
         distances.append(distance)
-        totalShots = distances.count
+        let count = distances.count
         
-        if totalShots > 0 {
-            averageDistance = Double(distances.reduce(0, +)) / Double(totalShots)
+        if count > 0 {
+            averageDistance = Double(distances.reduce(0, +)) / Double(count)
             minDistance = distances.min() ?? 0
             maxDistance = distances.max() ?? 0
         }
+    }
+    
+    mutating func addShot(with result: String) {
+        shotsByResult[result, default: 0] += 1
     }
 }
 
@@ -43,17 +51,15 @@ class ShotStatistics {
     static func calculateStatistics(for player: Player, shots: [Shot]) -> [String: ClubStatistics] {
         var stats: [String: ClubStatistics] = [:]
         
-        // Filter shots for this player that have distance traveled
+        // Filter shots for this player - include all shots, not just those with distance
+        // For putts specifically, track them even if distanceTraveled is 0 or nil
         let validShots = shots.filter { 
-            $0.player?.id == player.id && 
-            $0.distanceTraveled != nil && 
-            $0.distanceTraveled! > 0
+            $0.player?.id == player.id
         }
         
         // Group by club
         for shot in validShots {
-            guard let club = shot.club, 
-                  let distance = shot.distanceTraveled else {
+            guard let club = shot.club else {
                 continue
             }
             
@@ -61,7 +67,13 @@ class ShotStatistics {
                 stats[club] = ClubStatistics(club: club)
             }
             
-            stats[club]?.addDistance(distance)
+            // Add distance if available
+            if let distance = shot.distanceTraveled, distance > 0 {
+                stats[club]?.addDistance(distance)
+            }
+            
+            // Always track shot result (including putts)
+            stats[club]?.addShot(with: shot.result)
         }
         
         return stats
