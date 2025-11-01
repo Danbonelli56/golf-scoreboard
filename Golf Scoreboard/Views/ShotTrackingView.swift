@@ -506,6 +506,12 @@ struct ShotTrackingView: View {
             }
         }
         
+        // If this is a re-tee shot and no distance provided, use previous shot's distance
+        if pending.isRetaking && shotDistance == nil, shotNum > 1, let prev = previousShots.last, let prevDistance = prev.distanceToHole {
+            shotDistance = prevDistance
+            print("⛳ Re-tee shot: using previous shot distance: \(shotDistance!) yards")
+        }
+        
         // Handle putt modifiers: update previous putt's distance if this is a short/long putt
         // Note: Use previousShots before penalty adjustment for getting the actual previous shot
         if shotNum > 1, let prev = previousShots.last, prev.isPutt, pending.isPutt {
