@@ -41,7 +41,7 @@ struct ScorecardView: View {
                 }
                 
                 // Voice/Text Input Bar - Always at bottom
-                TextInputBar(inputText: $inputText, listening: $listening, onCommit: handleInput)
+                TextInputBar(inputText: $inputText, listening: $listening, onCommit: handleInput, onToggleListening: nil)
             }
             .navigationTitle("Scorecard")
             .toolbar {

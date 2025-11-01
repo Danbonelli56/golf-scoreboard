@@ -22,6 +22,7 @@ struct ShotTrackingView: View {
     @State private var listening = false
     @State private var needsCleanup = false
     @State private var nextShotIsPutt = false // Flag to mark next shot as putt
+    @State private var toggleMicAction: (() -> Void)?
     
     // Shot builder to accumulate information across multiple voice inputs
     struct PendingShot {
@@ -66,6 +67,8 @@ struct ShotTrackingView: View {
                     GameShotsView(game: game, selectedHole: $currentHole, course: game.course, shots: shots, onAddShot: {
                         selectedPlayer = game.players.first
                         showingShotEntry = true
+                    }, listening: listening, onToggleMicrophone: {
+                        toggleMicAction?()
                     })
                 } else {
                     VStack(spacing: 20) {
@@ -86,10 +89,13 @@ struct ShotTrackingView: View {
                 }
                 
                 // Voice/Text Input Bar
-                TextInputBar(inputText: $inputText, listening: $listening, onCommit: handleInput)
+                TextInputBar(inputText: $inputText, listening: $listening, onCommit: handleInput, onToggleListening: nil)
                     .background(Color(.systemBackground))
             }
             .navigationTitle("Shot Tracking")
+            .onPreferenceChange(MicToggleKey.self) { value in
+                toggleMicAction = value?.action
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
@@ -716,6 +722,8 @@ struct GameShotsView: View {
     let course: GolfCourse?
     let shots: [Shot]
     var onAddShot: () -> Void
+    let listening: Bool
+    var onToggleMicrophone: () -> Void
     
     // Hole yardage from the scorecard
     private var holeYardage: Int? {
@@ -768,14 +776,14 @@ struct GameShotsView: View {
                 .padding()
             }
             
-            // Add shot button
-            Button(action: onAddShot) {
-                Label("Add Shot", systemImage: "plus.circle.fill")
+            // Microphone button
+            Button(action: onToggleMicrophone) {
+                Label(listening ? "Listening..." : "Tap to Speak", systemImage: listening ? "mic.fill" : "mic")
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.blue)
+                    .background(listening ? Color.red : Color.blue)
                     .cornerRadius(10)
             }
             .padding()

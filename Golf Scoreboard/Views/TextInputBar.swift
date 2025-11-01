@@ -15,6 +15,7 @@ struct TextInputBar: View {
     @StateObject private var voiceManager = VoiceRecognitionManager()
     
     var onCommit: () -> Void
+    var onToggleListening: (() -> Void)?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -72,6 +73,7 @@ struct TextInputBar: View {
                 await voiceManager.requestAuthorization()
             }
         }
+        .preference(key: MicToggleKey.self, value: MicToggleHandler(action: toggleListening))
     }
     
     private func toggleListening() {
@@ -86,6 +88,7 @@ struct TextInputBar: View {
                 }
             }
         }
+        onToggleListening?()
     }
     
     private func commit() {
@@ -101,7 +104,23 @@ struct TextInputBar: View {
     }
 }
 
+struct MicToggleHandler: Equatable {
+    let action: () -> Void
+    
+    static func == (lhs: MicToggleHandler, rhs: MicToggleHandler) -> Bool {
+        return true // Always return true since we can't compare closures
+    }
+}
+
+struct MicToggleKey: PreferenceKey {
+    static var defaultValue: MicToggleHandler? = nil
+    
+    static func reduce(value: inout MicToggleHandler?, nextValue: () -> MicToggleHandler?) {
+        value = nextValue()
+    }
+}
+
 #Preview {
-    TextInputBar(inputText: .constant(""), listening: .constant(false), onCommit: {})
+    TextInputBar(inputText: .constant(""), listening: .constant(false), onCommit: {}, onToggleListening: nil)
 }
 
