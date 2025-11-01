@@ -764,7 +764,7 @@ struct GameShotsView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     ForEach(game.players) { player in
-                        ShotGroupCard(player: player, holeNumber: selectedHole, allShots: shots, currentGame: game)
+                        ShotGroupCard(player: player, holeNumber: selectedHole, allShots: shots, currentGameID: game.id, isHoled: game.holesScores.first(where: { $0.holeNumber == selectedHole })?.scores[player.id] != nil)
                     }
                 }
                 .padding()
@@ -790,24 +790,16 @@ struct ShotGroupCard: View {
     let player: Player
     let holeNumber: Int
     let allShots: [Shot]
-    let currentGame: Game?
+    let currentGameID: UUID
+    let isHoled: Bool
     
     var playerShots: [Shot] {
         // Filter by game, player, and hole
-        guard let game = currentGame else { return [] }
-        let gameID = game.id
         return allShots.filter { shot in
             guard let shotGameID = shot.game?.id else { return false }
-            return shotGameID == gameID && shot.player?.id == player.id && shot.holeNumber == holeNumber
+            return shotGameID == currentGameID && shot.player?.id == player.id && shot.holeNumber == holeNumber
         }
         .sorted { $0.shotNumber < $1.shotNumber }
-    }
-    
-    // Whether this player has a finalized score on this hole (e.g., via 'sunk putt')
-    private var isHoled: Bool {
-        guard let game = currentGame,
-              let holeScore = game.holesScores.first(where: { $0.holeNumber == holeNumber }) else { return false }
-        return holeScore.scores[player.id] != nil
     }
     
     var summary: ShotSummary {
