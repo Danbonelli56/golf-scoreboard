@@ -96,19 +96,6 @@ struct ShotTrackingView: View {
             .onPreferenceChange(MicToggleKey.self) { value in
                 toggleMicAction = value?.action
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        ForEach(games) { game in
-                            Button(game.course?.name ?? "Game") {
-                                _selectedGameIDString.wrappedValue = game.id.uuidString
-                            }
-                        }
-                    } label: {
-                        Label("Games", systemImage: "list.bullet")
-                    }
-                }
-            }
             .sheet(isPresented: $showingShotEntry) {
                 AddShotView(game: selectedGame, holeNumber: currentHole, player: selectedPlayer)
             }
@@ -459,6 +446,7 @@ struct ShotTrackingView: View {
         
         // Calculate shot number automatically
         let previousShots = shots.filter { 
+            $0.game?.id == game.id && 
             $0.player?.id == player.id && 
             $0.holeNumber == holeNum 
         }.sorted { $0.shotNumber < $1.shotNumber }
@@ -610,7 +598,7 @@ struct ShotTrackingView: View {
             lastShotPlayer = player
             
             if shotNum > 1, let dist = shotDistance {
-                recalculateShotDistances(for: player, on: holeNum, newShotDistance: dist, context: modelContext)
+                recalculateShotDistances(for: player, on: holeNum, game: game, newShotDistance: dist, context: modelContext)
             }
             
             NotificationCenter.default.post(name: .shotsUpdated, object: nil)
@@ -631,7 +619,9 @@ struct ShotTrackingView: View {
             let targetPlayer = pendingShot?.player ?? lastShotPlayer ?? game.players.first(where: { $0.isCurrentUser }) ?? game.players.first
             
             if let player = targetPlayer {
-                let playerShotsThisHole = shots.filter { $0.player?.id == player.id && $0.holeNumber == currentHole }
+                let playerShotsThisHole = shots.filter { 
+                    $0.game?.id == game.id && $0.player?.id == player.id && $0.holeNumber == currentHole 
+                }
                 // Use max shot number instead of count to account for penalty strokes
                 let totalShots = playerShotsThisHole.map { $0.shotNumber }.max() ?? 0
                 finalizeHoleScore(for: player, on: currentHole, shotsCount: totalShots)
@@ -640,9 +630,10 @@ struct ShotTrackingView: View {
         }
     }
     
-    private func recalculateShotDistances(for player: Player, on holeNumber: Int, newShotDistance: Int, context: ModelContext) {
-        // Get all shots for this player on this hole, sorted by shot number
+    private func recalculateShotDistances(for player: Player, on holeNumber: Int, game: Game, newShotDistance: Int, context: ModelContext) {
+        // Get all shots for this game, player, and hole, sorted by shot number
         let shots = allShots.filter { 
+            $0.game?.id == game.id && 
             $0.player?.id == player.id && 
             $0.holeNumber == holeNumber 
         }.sorted { $0.shotNumber < $1.shotNumber }
@@ -679,6 +670,7 @@ struct ShotTrackingView: View {
         
         // Find the last shot for this hole and set distanceTraveled to 0 if it's a putt
         let playerShots = allShots.filter { 
+            $0.game?.id == game.id && 
             $0.player?.id == player.id && 
             $0.holeNumber == holeNumber 
         }.sorted { $0.shotNumber < $1.shotNumber }
@@ -799,9 +791,10 @@ struct ShotGroupCard: View {
     let currentGame: Game?
     
     var playerShots: [Shot] {
-        // Filter strictly by player and hole to avoid touching possibly invalidated game references
-        allShots.filter { shot in
-            shot.player?.id == player.id && shot.holeNumber == holeNumber
+        // Filter by game, player, and hole
+        guard let game = currentGame else { return [] }
+        return allShots.filter { shot in
+            shot.game?.id == game.id && shot.player?.id == player.id && shot.holeNumber == holeNumber
         }
         .sorted { $0.shotNumber < $1.shotNumber }
     }
