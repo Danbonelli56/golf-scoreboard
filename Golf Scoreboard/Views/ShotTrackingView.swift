@@ -507,6 +507,7 @@ struct ShotTrackingView: View {
         }
         
         // If this is a re-tee shot and no distance provided, use previous shot's distance
+        // (If player provides a distance for a drop area, that will be used instead)
         if pending.isRetaking && shotDistance == nil, shotNum > 1, let prev = previousShots.last, let prevDistance = prev.distanceToHole {
             shotDistance = prevDistance
             print("⛳ Re-tee shot: using previous shot distance: \(shotDistance!) yards")
