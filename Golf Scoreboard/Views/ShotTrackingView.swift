@@ -471,10 +471,17 @@ struct ShotTrackingView: View {
                 prev.isPenalty = true
                 print("🏌️ Previous shot went into HAZARD - adding 1 stroke penalty")
             } else if prev.result == "Out of Bounds" && !prev.isPenalty {
-                // Out of bounds: 2 stroke penalty
-                penaltyStrokes = 2
+                // Out of bounds: Check if re-teeing or taking a drop
+                if pending.isRetaking {
+                    // Re-tee option: 1 stroke penalty (next shot is #3)
+                    penaltyStrokes = 1
+                    print("🏌️ Previous shot went OUT OF BOUNDS - re-teeing with 1 stroke penalty")
+                } else {
+                    // Take a drop option: 2 stroke penalty (next shot is #4)
+                    penaltyStrokes = 2
+                    print("🏌️ Previous shot went OUT OF BOUNDS - taking a drop with 2 stroke penalty")
+                }
                 prev.isPenalty = true
-                print("🏌️ Previous shot went OUT OF BOUNDS - adding 2 stroke penalty")
             }
             
             // Adjust shot number based on penalty
