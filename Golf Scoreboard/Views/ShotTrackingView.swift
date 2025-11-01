@@ -383,9 +383,9 @@ struct ShotTrackingView: View {
         var isRetaking = false
         
         if isPenalty {
-            // Check if this is a retaking from tee (driver or tee mentioned)
+            // Check if this is a retaking from tee (driver or tee mentioned or "hit again")
             if lowerText.contains("retee") || lowerText.contains("re tee") || lowerText.contains("hitting from") || lowerText.contains("tee off") || 
-               lowerText.contains("driver") || club?.lowercased() == "driver" || lowerText.contains("from the tee") {
+               lowerText.contains("driver") || club?.lowercased() == "driver" || lowerText.contains("from the tee") || lowerText.contains("hit again") {
                 isRetaking = true
                 print("⛳ Detected RETAKING from tee after penalty")
             } else {
