@@ -42,6 +42,17 @@ struct Golf_ScoreboardApp: App {
                 print("✅ Default courses imported")
             } else {
                 print("ℹ️ Courses already exist in database")
+                // Check for North Hampton and add white tees if missing
+                if let courses = allCourses, let northHampton = courses.first(where: { $0.name == "The Golf Club at North Hampton" }) {
+                    let allHolesHaveWhite = northHampton.holes.allSatisfy { hole in
+                        hole.teeDistances.contains { $0.teeColor.lowercased() == "white" }
+                    }
+                    if !allHolesHaveWhite {
+                        print("⚠️ Adding white tees to North Hampton")
+                        CourseImporter.addWhiteTeesToNorthHampton(course: northHampton, context: container.mainContext)
+                        try? container.mainContext.save()
+                    }
+                }
             }
             
             return container

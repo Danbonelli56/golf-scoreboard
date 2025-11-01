@@ -125,6 +125,30 @@ class CourseImporter {
         return course
     }
     
+    static func addWhiteTeesToNorthHampton(course: GolfCourse, context: ModelContext) {
+        // White tees distances from BlueGolf
+        let whiteDistances = [342, 549, 154, 385, 335, 455, 159, 308, 322, 274, 352, 472, 372, 155, 492, 355, 122, 365]
+        
+        let holes = course.holes.sorted { $0.holeNumber < $1.holeNumber }
+        for (index, hole) in holes.enumerated() {
+            if index < whiteDistances.count {
+                // Check if white tee already exists for this hole
+                let hasWhiteTee = hole.teeDistances.contains { $0.teeColor.lowercased() == "white" }
+                if !hasWhiteTee {
+                    let whiteTee = TeeDistance(teeColor: "White", distanceYards: whiteDistances[index])
+                    hole.teeDistances.append(whiteTee)
+                }
+            }
+        }
+        
+        // Add white tee set if it doesn't exist
+        let hasWhiteTeeSet = course.teeSets.contains { $0.teeColor.lowercased() == "white" }
+        if !hasWhiteTeeSet {
+            let whiteTeeSet = TeeSet(teeColor: "White", slope: 130.0, rating: 69.0)
+            course.teeSets.append(whiteTeeSet)
+        }
+    }
+    
     // MARK: - JSON Import/Export
     
     static func exportCourseToJSON(_ course: GolfCourse) -> String? {
