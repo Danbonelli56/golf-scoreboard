@@ -150,7 +150,7 @@ struct HoleRow: View {
                             Text(tee.teeColor.capitalized)
                                 .font(.caption2)
                                 .foregroundColor(.blue)
-                            Text("\(tee.distanceYards)yds")
+                            Text("\(tee.distanceYards)")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
