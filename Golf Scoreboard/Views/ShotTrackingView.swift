@@ -382,16 +382,14 @@ struct ShotTrackingView: View {
         var isPenalty = result == .outOfBounds || result == .hazard
         var isRetaking = false
         
-        if isPenalty {
-            // Check if this is a retaking from tee (driver or tee mentioned or "hit again")
-            if lowerText.contains("retee") || lowerText.contains("re tee") || lowerText.contains("hitting from") || lowerText.contains("tee off") || 
-               lowerText.contains("driver") || club?.lowercased() == "driver" || lowerText.contains("from the tee") || lowerText.contains("hit again") {
-                isRetaking = true
-                print("⛳ Detected RETAKING from tee after penalty")
-            } else {
-                // Taking a drop - shot number increments normally
-                print("⛳ Detected DROP after penalty")
-            }
+        // Check if this is a retaking from tee (driver or tee mentioned, "hit again", or "here again")
+        if lowerText.contains("retee") || lowerText.contains("re tee") || lowerText.contains("hitting from") || lowerText.contains("tee off") || 
+           lowerText.contains("driver") || club?.lowercased() == "driver" || lowerText.contains("from the tee") || lowerText.contains("hit again") || lowerText.contains("here again") {
+            isRetaking = true
+            print("⛳ Detected RETAKING from tee after penalty")
+        } else if isPenalty {
+            // Taking a drop - shot number increments normally
+            print("⛳ Detected DROP after penalty")
         }
         
         // If distance was specified in feet (not yards), it's a putt
