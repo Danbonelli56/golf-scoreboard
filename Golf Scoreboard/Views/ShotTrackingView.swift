@@ -445,10 +445,10 @@ struct ShotTrackingView: View {
         let holeNum = pending.holeNumber ?? currentHole
         
         // Calculate shot number automatically
+        let gameID = game.id
         let previousShots = shots.filter { 
-            $0.game?.id == game.id && 
-            $0.player?.id == player.id && 
-            $0.holeNumber == holeNum 
+            guard let shotGameID = $0.game?.id else { return false }
+            return shotGameID == gameID && $0.player?.id == player.id && $0.holeNumber == holeNum 
         }.sorted { $0.shotNumber < $1.shotNumber }
         
         var shotNum = (previousShots.last?.shotNumber ?? 0) + 1
@@ -619,8 +619,10 @@ struct ShotTrackingView: View {
             let targetPlayer = pendingShot?.player ?? lastShotPlayer ?? game.players.first(where: { $0.isCurrentUser }) ?? game.players.first
             
             if let player = targetPlayer {
+                let gameID = game.id
                 let playerShotsThisHole = shots.filter { 
-                    $0.game?.id == game.id && $0.player?.id == player.id && $0.holeNumber == currentHole 
+                    guard let shotGameID = $0.game?.id else { return false }
+                    return shotGameID == gameID && $0.player?.id == player.id && $0.holeNumber == currentHole 
                 }
                 // Use max shot number instead of count to account for penalty strokes
                 let totalShots = playerShotsThisHole.map { $0.shotNumber }.max() ?? 0
@@ -632,10 +634,10 @@ struct ShotTrackingView: View {
     
     private func recalculateShotDistances(for player: Player, on holeNumber: Int, game: Game, newShotDistance: Int, context: ModelContext) {
         // Get all shots for this game, player, and hole, sorted by shot number
+        let gameID = game.id
         let shots = allShots.filter { 
-            $0.game?.id == game.id && 
-            $0.player?.id == player.id && 
-            $0.holeNumber == holeNumber 
+            guard let shotGameID = $0.game?.id else { return false }
+            return shotGameID == gameID && $0.player?.id == player.id && $0.holeNumber == holeNumber 
         }.sorted { $0.shotNumber < $1.shotNumber }
         
         // Recalculate distanceTraveled for all shots up to the current one
@@ -669,10 +671,10 @@ struct ShotTrackingView: View {
         guard let game = selectedGame else { return }
         
         // Find the last shot for this hole and set distanceTraveled to 0 if it's a putt
+        let gameID = game.id
         let playerShots = allShots.filter { 
-            $0.game?.id == game.id && 
-            $0.player?.id == player.id && 
-            $0.holeNumber == holeNumber 
+            guard let shotGameID = $0.game?.id else { return false }
+            return shotGameID == gameID && $0.player?.id == player.id && $0.holeNumber == holeNumber 
         }.sorted { $0.shotNumber < $1.shotNumber }
         
         if let lastShot = playerShots.last, lastShot.isPutt, lastShot.distanceTraveled == nil {
@@ -793,8 +795,10 @@ struct ShotGroupCard: View {
     var playerShots: [Shot] {
         // Filter by game, player, and hole
         guard let game = currentGame else { return [] }
+        let gameID = game.id
         return allShots.filter { shot in
-            shot.game?.id == game.id && shot.player?.id == player.id && shot.holeNumber == holeNumber
+            guard let shotGameID = shot.game?.id else { return false }
+            return shotGameID == gameID && shot.player?.id == player.id && shot.holeNumber == holeNumber
         }
         .sorted { $0.shotNumber < $1.shotNumber }
     }
