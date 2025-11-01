@@ -90,6 +90,9 @@ class CourseImporter {
         // Gold tees distances (shown on scorecard)
         let goldDistances = [406, 620, 195, 448, 375, 525, 189, 366, 393, 325, 411, 552, 445, 218, 580, 446, 140, 449]
         
+        // White tees distances from BlueGolf
+        let whiteDistances = [342, 549, 154, 385, 335, 455, 159, 308, 322, 274, 352, 472, 372, 155, 492, 355, 122, 365]
+        
         // Create holes with distances
         for i in 0..<18 {
             let hole = Hole(
@@ -98,16 +101,20 @@ class CourseImporter {
                 mensHandicap: mensHandicaps[i]
             )
             
-            // Add gold tee distance
+            // Add tee distances
             let goldTee = TeeDistance(teeColor: "Gold", distanceYards: goldDistances[i])
+            let whiteTee = TeeDistance(teeColor: "White", distanceYards: whiteDistances[i])
+            
             hole.teeDistances.append(goldTee)
+            hole.teeDistances.append(whiteTee)
             
             course.holes.append(hole)
         }
         
         // Add tee sets
         let teeSets = [
-            TeeSet(teeColor: "Gold", slope: 141.0, rating: 74.5)
+            TeeSet(teeColor: "Gold", slope: 141.0, rating: 74.5),
+            TeeSet(teeColor: "White", slope: 130.0, rating: 69.0)
         ]
         
         for teeSet in teeSets {
