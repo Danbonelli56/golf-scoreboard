@@ -71,27 +71,27 @@ struct ClubStatsRow: View {
             
             // Distance stats (if available)
             if stats.averageDistance > 0 {
-                HStack {
-                    Text("Avg:")
-                    Text("\(Int(stats.averageDistance)) yds")
-                        .foregroundColor(.blue)
-                        .fontWeight(.semibold)
-                    
-                    Text("|")
-                        .foregroundColor(.secondary)
-                    
-                    Text("Range:")
-                    Text("\(stats.minDistance)-\(stats.maxDistance) yds")
-                        .foregroundColor(.green)
-                        .fontWeight(.semibold)
-                    
-                    Spacer()
-                    
-                    Text("\(stats.totalShots) shots")
-                        .foregroundColor(.secondary)
-                        .font(.caption)
-                }
-                .font(.caption)
+            HStack {
+                Text("Avg:")
+                Text("\(Int(stats.averageDistance)) yds")
+                    .foregroundColor(.blue)
+                    .fontWeight(.semibold)
+                
+                Text("|")
+                    .foregroundColor(.secondary)
+                
+                Text("Range:")
+                Text("\(stats.minDistance)-\(stats.maxDistance) yds")
+                    .foregroundColor(.green)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Text("\(stats.totalShots) shots")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
+            }
+            .font(.caption)
             } else {
                 // Show total shots count even when no distance data
                 HStack {
