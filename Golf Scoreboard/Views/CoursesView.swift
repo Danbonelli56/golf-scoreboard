@@ -124,7 +124,8 @@ struct CourseDetailView: View {
 }
 
 struct HoleRow: View {
-    let hole: Hole
+    @Bindable var hole: Hole
+    @State private var showingEditHole = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -158,6 +159,12 @@ struct HoleRow: View {
                 }
                 .padding(.vertical, 4)
             }
+        }
+        .sheet(isPresented: $showingEditHole) {
+            EditHoleView(hole: hole)
+        }
+        .onTapGesture {
+            showingEditHole = true
         }
     }
 }
