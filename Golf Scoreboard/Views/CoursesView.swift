@@ -12,6 +12,8 @@ struct CoursesView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var courses: [GolfCourse]
     @State private var showingAddCourse = false
+    @State private var showingImportSheet = false
+    @State private var importJSONText = ""
     
     var body: some View {
         NavigationView {
@@ -27,7 +29,13 @@ struct CoursesView: View {
             }
             .navigationTitle("Golf Courses")
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                ToolbarItemGroup(placement: .navigationBarTrailing) {
+                    Button {
+                        showingImportSheet = true
+                    } label: {
+                        Label("Import", systemImage: "square.and.arrow.down")
+                    }
+                    
                     Button {
                         showingAddCourse = true
                     } label: {
@@ -38,12 +46,26 @@ struct CoursesView: View {
             .sheet(isPresented: $showingAddCourse) {
                 AddCourseView()
             }
+            .sheet(isPresented: $showingImportSheet) {
+                ImportCourseView(importJSONText: $importJSONText, onImport: {
+                    if !importJSONText.isEmpty {
+                        importCourse(from: importJSONText)
+                    }
+                    showingImportSheet = false
+                    importJSONText = ""
+                })
+            }
             .overlay {
                 if courses.isEmpty {
                     EmptyCoursesView()
                 }
             }
         }
+    }
+    
+    private func importCourse(from jsonString: String) {
+        _ = CourseImporter.importCourseFromJSON(jsonString, context: modelContext)
+        try? modelContext.save()
     }
     
     private func deleteCourses(offsets: IndexSet) {

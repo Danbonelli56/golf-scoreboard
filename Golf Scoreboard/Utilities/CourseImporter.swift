@@ -124,5 +124,89 @@ class CourseImporter {
         context.insert(course)
         return course
     }
+    
+    // MARK: - JSON Import/Export
+    
+    static func exportCourseToJSON(_ course: GolfCourse) -> String? {
+        var holesArray: [[String: Any]] = []
+        
+        let holes = course.holes.sorted { $0.holeNumber < $1.holeNumber }
+        for hole in holes {
+            var teeDistancesArray: [[String: Any]] = []
+            for tee in hole.teeDistances {
+                teeDistancesArray.append([
+                    "teeColor": tee.teeColor,
+                    "distanceYards": tee.distanceYards
+                ])
+            }
+            
+            let holeDict: [String: Any] = [
+                "holeNumber": hole.holeNumber,
+                "par": hole.par,
+                "mensHandicap": hole.mensHandicap,
+                "ladiesHandicap": hole.ladiesHandicap ?? 0,
+                "teeDistances": teeDistancesArray
+            ]
+            
+            holesArray.append(holeDict)
+        }
+        
+        let courseDict: [String: Any] = [
+            "name": course.name,
+            "location": course.location ?? "",
+            "slope": course.slope,
+            "rating": course.rating,
+            "holes": holesArray
+        ]
+        
+        if let jsonData = try? JSONSerialization.data(withJSONObject: courseDict, options: .prettyPrinted),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            return jsonString
+        }
+        
+        return nil
+    }
+    
+    static func importCourseFromJSON(_ jsonString: String, context: ModelContext) -> GolfCourse? {
+        guard let jsonData = jsonString.data(using: .utf8),
+              let courseDict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              let name = courseDict["name"] as? String else {
+            return nil
+        }
+        
+        let location = courseDict["location"] as? String
+        let slope = courseDict["slope"] as? Int ?? 113
+        let rating = courseDict["rating"] as? Double ?? 72.0
+        
+        let course = GolfCourse(name: name, location: location, slope: slope, rating: rating)
+        
+        if let holesArray = courseDict["holes"] as? [[String: Any]] {
+            for holeDict in holesArray {
+                guard let holeNumber = holeDict["holeNumber"] as? Int,
+                      let par = holeDict["par"] as? Int,
+                      let mensHandicap = holeDict["mensHandicap"] as? Int else {
+                    continue
+                }
+                
+                let ladiesHandicap = holeDict["ladiesHandicap"] as? Int
+                let hole = Hole(holeNumber: holeNumber, par: par, mensHandicap: mensHandicap, ladiesHandicap: ladiesHandicap)
+                
+                if let teeDistancesArray = holeDict["teeDistances"] as? [[String: Any]] {
+                    for teeDict in teeDistancesArray {
+                        if let teeColor = teeDict["teeColor"] as? String,
+                           let distanceYards = teeDict["distanceYards"] as? Int {
+                            let tee = TeeDistance(teeColor: teeColor, distanceYards: distanceYards)
+                            hole.teeDistances.append(tee)
+                        }
+                    }
+                }
+                
+                course.holes.append(hole)
+            }
+        }
+        
+        context.insert(course)
+        return course
+    }
 }
 
