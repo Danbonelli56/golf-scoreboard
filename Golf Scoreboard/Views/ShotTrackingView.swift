@@ -67,7 +67,8 @@ struct ShotTrackingView: View {
                     let gameID = game.id
                     let players = game.players
                     let course = game.course
-                    GameShotsView(gameID: gameID, players: players, selectedHole: $currentHole, course: course, shots: shots, onAddShot: {
+                    let holesScores = game.holesScores
+                    GameShotsView(gameID: gameID, players: players, selectedHole: $currentHole, course: course, holesScores: holesScores, shots: shots, onAddShot: {
                         selectedPlayer = players.first
                         showingShotEntry = true
                     }, listening: listening, onToggleMicrophone: {
@@ -718,6 +719,7 @@ struct GameShotsView: View {
     let players: [Player]
     @Binding var selectedHole: Int
     let course: GolfCourse?
+    let holesScores: [HoleScore]
     let shots: [Shot]
     var onAddShot: () -> Void
     let listening: Bool
@@ -768,7 +770,9 @@ struct GameShotsView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     ForEach(players) { player in
-                        ShotGroupCard(player: player, holeNumber: selectedHole, allShots: shots, currentGameID: gameID, isHoled: false)
+                        let holeScore = holesScores.first(where: { $0.holeNumber == selectedHole })
+                        let isHoled = holeScore?.scores[player.id] != nil
+                        ShotGroupCard(player: player, holeNumber: selectedHole, allShots: shots, currentGameID: gameID, isHoled: isHoled)
                     }
                 }
                 .padding()
