@@ -96,6 +96,11 @@ struct CourseDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showingAddHole = false
     
+    private var uniqueTeeColors: [String] {
+        let teeColors = Set(course.holes.flatMap { $0.teeDistances.map { $0.teeColor } })
+        return teeColors.sorted()
+    }
+    
     var body: some View {
         Form {
             Section("Course Information") {
@@ -104,6 +109,17 @@ struct CourseDetailView: View {
                 Stepper("Slope: \(course.slope)", value: $course.slope, in: 55...155)
                 
                 Stepper("Rating: \(String(format: "%.1f", course.rating))", value: $course.rating, in: 60.0...80.0, step: 0.1)
+            }
+            
+            Section("Tee Distances") {
+                if course.holes.isEmpty {
+                    Text("No holes defined")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(uniqueTeeColors, id: \.self) { teeColor in
+                        TeeDistanceSummary(course: course, teeColor: teeColor)
+                    }
+                }
             }
             
             Section("Holes") {
@@ -142,6 +158,48 @@ struct CourseDetailView: View {
             modelContext.delete(sortedHoles[index])
         }
         try? modelContext.save()
+    }
+}
+
+struct TeeDistanceSummary: View {
+    let course: GolfCourse
+    let teeColor: String
+    
+    private var front9Total: Int {
+        course.holes.filter { $0.holeNumber <= 9 }
+            .compactMap { hole in
+                hole.teeDistances.first(where: { $0.teeColor == teeColor })?.distanceYards
+            }
+            .reduce(0, +)
+    }
+    
+    private var back9Total: Int {
+        course.holes.filter { $0.holeNumber > 9 }
+            .compactMap { hole in
+                hole.teeDistances.first(where: { $0.teeColor == teeColor })?.distanceYards
+            }
+            .reduce(0, +)
+    }
+    
+    private var totalYards: Int {
+        front9Total + back9Total
+    }
+    
+    var body: some View {
+        HStack {
+            Text(teeColor.capitalized)
+                .fontWeight(.medium)
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Front: \(front9Total)")
+                Text("Back: \(back9Total)")
+                Text("Total: \(totalYards)")
+            }
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
     }
 }
 
