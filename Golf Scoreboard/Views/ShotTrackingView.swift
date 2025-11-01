@@ -614,7 +614,8 @@ struct ShotTrackingView: View {
             
             if let player = targetPlayer {
                 let playerShotsThisHole = shots.filter { $0.player?.id == player.id && $0.holeNumber == currentHole }
-                let totalShots = playerShotsThisHole.count
+                // Use max shot number instead of count to account for penalty strokes
+                let totalShots = playerShotsThisHole.map { $0.shotNumber }.max() ?? 0
                 finalizeHoleScore(for: player, on: currentHole, shotsCount: totalShots)
                 pendingShot = nil // Clear pending shot
             }
@@ -794,7 +795,8 @@ struct ShotGroupCard: View {
     
     var summary: ShotSummary {
         var summary = ShotSummary()
-        summary.totalShots = playerShots.count
+        // Use max shot number instead of count to account for penalty strokes
+        summary.totalShots = playerShots.map { $0.shotNumber }.max() ?? 0
         summary.totalPutts = playerShots.filter { $0.isPutt }.count
         
         for shot in playerShots {
