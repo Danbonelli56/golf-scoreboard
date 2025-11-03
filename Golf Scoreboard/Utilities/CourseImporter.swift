@@ -50,11 +50,13 @@ class CourseImporter {
             let blackTee = TeeDistance(teeColor: "Black", distanceYards: blackDistances[i])
             let whiteTee = TeeDistance(teeColor: "White", distanceYards: whiteDistances[i])
             
-            hole.teeDistances.append(blueTee)
-            hole.teeDistances.append(blackTee)
-            hole.teeDistances.append(whiteTee)
+            if hole.teeDistances == nil { hole.teeDistances = [] }
+            hole.teeDistances!.append(blueTee)
+            hole.teeDistances!.append(blackTee)
+            hole.teeDistances!.append(whiteTee)
             
-            course.holes.append(hole)
+            if course.holes == nil { course.holes = [] }
+            course.holes!.append(hole)
         }
         
         // Add tee sets with slope and rating
@@ -65,8 +67,9 @@ class CourseImporter {
             TeeSet(teeColor: "White", slope: 111.0, rating: 66.1)
         ]
         
+        if course.teeSets == nil { course.teeSets = [] }
         for teeSet in teeSets {
-            course.teeSets.append(teeSet)
+            course.teeSets!.append(teeSet)
         }
         
         context.insert(course)
@@ -105,10 +108,12 @@ class CourseImporter {
             let goldTee = TeeDistance(teeColor: "Gold", distanceYards: goldDistances[i])
             let whiteTee = TeeDistance(teeColor: "White", distanceYards: whiteDistances[i])
             
-            hole.teeDistances.append(goldTee)
-            hole.teeDistances.append(whiteTee)
+            if hole.teeDistances == nil { hole.teeDistances = [] }
+            hole.teeDistances!.append(goldTee)
+            hole.teeDistances!.append(whiteTee)
             
-            course.holes.append(hole)
+            if course.holes == nil { course.holes = [] }
+            course.holes!.append(hole)
         }
         
         // Add tee sets
@@ -117,8 +122,9 @@ class CourseImporter {
             TeeSet(teeColor: "White", slope: 130.0, rating: 69.0)
         ]
         
+        if course.teeSets == nil { course.teeSets = [] }
         for teeSet in teeSets {
-            course.teeSets.append(teeSet)
+            course.teeSets!.append(teeSet)
         }
         
         context.insert(course)
@@ -129,23 +135,25 @@ class CourseImporter {
         // White tees distances from BlueGolf
         let whiteDistances = [342, 549, 154, 385, 335, 455, 159, 308, 322, 274, 352, 472, 372, 155, 492, 355, 122, 365]
         
-        let holes = course.holes.sorted { $0.holeNumber < $1.holeNumber }
+        let holes = (course.holes ?? []).sorted { $0.holeNumber < $1.holeNumber }
         for (index, hole) in holes.enumerated() {
             if index < whiteDistances.count {
                 // Check if white tee already exists for this hole
-                let hasWhiteTee = hole.teeDistances.contains { $0.teeColor.lowercased() == "white" }
+                let hasWhiteTee = (hole.teeDistances ?? []).contains { $0.teeColor.lowercased() == "white" }
                 if !hasWhiteTee {
                     let whiteTee = TeeDistance(teeColor: "White", distanceYards: whiteDistances[index])
-                    hole.teeDistances.append(whiteTee)
+                    if hole.teeDistances == nil { hole.teeDistances = [] }
+                    hole.teeDistances!.append(whiteTee)
                 }
             }
         }
         
         // Add white tee set if it doesn't exist
-        let hasWhiteTeeSet = course.teeSets.contains { $0.teeColor.lowercased() == "white" }
+        let hasWhiteTeeSet = (course.teeSets ?? []).contains { $0.teeColor.lowercased() == "white" }
         if !hasWhiteTeeSet {
             let whiteTeeSet = TeeSet(teeColor: "White", slope: 130.0, rating: 69.0)
-            course.teeSets.append(whiteTeeSet)
+            if course.teeSets == nil { course.teeSets = [] }
+            course.teeSets!.append(whiteTeeSet)
         }
     }
     
@@ -154,10 +162,10 @@ class CourseImporter {
     static func exportCourseToJSON(_ course: GolfCourse) -> String? {
         var holesArray: [[String: Any]] = []
         
-        let holes = course.holes.sorted { $0.holeNumber < $1.holeNumber }
+        let holes = (course.holes ?? []).sorted { $0.holeNumber < $1.holeNumber }
         for hole in holes {
             var teeDistancesArray: [[String: Any]] = []
-            for tee in hole.teeDistances {
+            for tee in hole.teeDistances ?? [] {
                 teeDistancesArray.append([
                     "teeColor": tee.teeColor,
                     "distanceYards": tee.distanceYards
@@ -220,12 +228,14 @@ class CourseImporter {
                         if let teeColor = teeDict["teeColor"] as? String,
                            let distanceYards = teeDict["distanceYards"] as? Int {
                             let tee = TeeDistance(teeColor: teeColor, distanceYards: distanceYards)
-                            hole.teeDistances.append(tee)
+                            if hole.teeDistances == nil { hole.teeDistances = [] }
+                            hole.teeDistances!.append(tee)
                         }
                     }
                 }
                 
-                course.holes.append(hole)
+                if course.holes == nil { course.holes = [] }
+                course.holes!.append(hole)
             }
         }
         

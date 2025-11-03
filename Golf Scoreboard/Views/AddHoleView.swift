@@ -49,7 +49,8 @@ struct AddHoleView: View {
     
     private func addHole() {
         let hole = Hole(holeNumber: holeNumber, par: par, mensHandicap: handicap)
-        course.holes.append(hole)
+        if course.holes == nil { course.holes = [] }
+        course.holes!.append(hole)
         
         modelContext.insert(hole)
         try? modelContext.save()

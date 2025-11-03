@@ -66,7 +66,8 @@ struct AddCourseView: View {
                 par: defaultPars[i],
                 mensHandicap: defaultHandicaps[i]
             )
-            course.holes.append(hole)
+            if course.holes == nil { course.holes = [] }
+            course.holes!.append(hole)
         }
         
         modelContext.insert(course)

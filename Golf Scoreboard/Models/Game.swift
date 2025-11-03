@@ -12,9 +12,9 @@ import SwiftData
 final class Game {
     var id: UUID = UUID()
     var course: GolfCourse?
-    @Relationship(deleteRule: .nullify) var players: [Player] = []
-    @Relationship(deleteRule: .cascade) var holesScores: [HoleScore] = []
-    @Relationship(deleteRule: .cascade) var shots: [Shot] = []
+    @Relationship(deleteRule: .nullify, inverse: \Player.games) var players: [Player]?
+    @Relationship(deleteRule: .cascade, inverse: \HoleScore.game) var holesScores: [HoleScore]?
+    @Relationship(deleteRule: .cascade, inverse: \Shot.game) var shots: [Shot]?
     var date: Date = Date()
     var createdAt: Date?
     
@@ -27,33 +27,38 @@ final class Game {
         self.createdAt = nil
     }
     
+    // Computed properties for safe access to optional arrays
+    var playersArray: [Player] { players ?? [] }
+    var holesScoresArray: [HoleScore] { holesScores ?? [] }
+    var shotsArray: [Shot] { shots ?? [] }
+    
     // Computed properties for front 9, back 9, and total
     var front9Scores: [(player: Player, gross: Int, net: Int)] {
-        let front9 = holesScores.filter { $0.holeNumber <= 9 }
+        let front9 = holesScoresArray.filter { $0.holeNumber <= 9 }
         return calculateScores(holesScores: front9, useHalfHandicap: true)
     }
     
     var back9Scores: [(player: Player, gross: Int, net: Int)] {
-        let back9 = holesScores.filter { $0.holeNumber > 9 }
+        let back9 = holesScoresArray.filter { $0.holeNumber > 9 }
         return calculateScores(holesScores: back9, useHalfHandicap: true)
     }
     
     var totalScores: [(player: Player, gross: Int, net: Int)] {
-        return calculateScores(holesScores: holesScores, useHalfHandicap: false)
+        return calculateScores(holesScores: holesScoresArray, useHalfHandicap: false)
     }
     
     private func calculateScores(holesScores: [HoleScore], useHalfHandicap: Bool = false) -> [(player: Player, gross: Int, net: Int)] {
         var playerTotals: [UUID: Int] = [:]
         
         for holeScore in holesScores {
-            for player in players {
+            for player in playersArray {
                 if let score = holeScore.scores[player.id] {
                     playerTotals[player.id, default: 0] += score
                 }
             }
         }
         
-        return players.map { player in
+        return playersArray.map { player in
             let gross = playerTotals[player.id] ?? 0
             let effectiveHandicap = useHalfHandicap ? player.handicap / 2.0 : player.handicap
             let net = max(0, gross - Int(round(effectiveHandicap)))
@@ -67,7 +72,7 @@ final class HoleScore {
     var game: Game?
     var holeNumber: Int = 1
     var createdAt: Date = Date()
-    @Relationship(deleteRule: .cascade) var playerScores: [PlayerScore] = []
+    @Relationship(deleteRule: .cascade, inverse: \PlayerScore.holeScore) var playerScores: [PlayerScore]?
     
     init(holeNumber: Int) {
         self.holeNumber = holeNumber
@@ -78,7 +83,7 @@ final class HoleScore {
     // Computed property for backward compatibility
     var scores: [UUID: Int] {
         var result: [UUID: Int] = [:]
-        for playerScore in playerScores {
+        for playerScore in playerScores ?? [] {
             if let playerId = playerScore.player?.id {
                 result[playerId] = playerScore.score
             }
@@ -94,7 +99,7 @@ final class HoleScore {
         set {
             if let newValue = newValue {
                 // Find or create PlayerScore for this player
-                if let existingPlayerScore = playerScores.first(where: { $0.player?.id == playerId }) {
+                if let existingPlayerScore = playerScores?.first(where: { $0.player?.id == playerId }) {
                     existingPlayerScore.score = newValue
                 } else {
                     // Need to find the player to create the relationship
@@ -102,8 +107,8 @@ final class HoleScore {
                 }
             } else {
                 // Remove the player score
-                if let index = playerScores.firstIndex(where: { $0.player?.id == playerId }) {
-                    playerScores.remove(at: index)
+                if let index = playerScores?.firstIndex(where: { $0.player?.id == playerId }) {
+                    playerScores?.remove(at: index)
                 }
             }
         }
@@ -111,12 +116,13 @@ final class HoleScore {
     
     // Helper method to set score with player reference
     func setScore(for player: Player, score: Int) {
-        if let existingPlayerScore = playerScores.first(where: { $0.player?.id == player.id }) {
+        if playerScores == nil { playerScores = [] }
+        if let existingPlayerScore = playerScores!.first(where: { $0.player?.id == player.id }) {
             existingPlayerScore.score = score
         } else {
             let playerScore = PlayerScore(player: player, score: score)
             playerScore.holeScore = self
-            playerScores.append(playerScore)
+            playerScores!.append(playerScore)
         }
     }
 }

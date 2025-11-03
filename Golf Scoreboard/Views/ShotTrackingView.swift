@@ -65,9 +65,9 @@ struct ShotTrackingView: View {
                 // Main content
                 if let game = selectedGame {
                     let gameID = game.id
-                    let players = game.players
+                    let players = game.playersArray
                     let course = game.course
-                    let holesScores = game.holesScores
+                    let holesScores = game.holesScoresArray
                     GameShotsView(gameID: gameID, players: players, selectedHole: $currentHole, course: course, holesScores: holesScores, shots: shots, onAddShot: {
                         selectedPlayer = players.first
                         showingShotEntry = true
@@ -225,7 +225,7 @@ struct ShotTrackingView: View {
         
         // Extract player name
         var targetPlayer: Player?
-        for player in game.players {
+        for player in game.playersArray {
             let playerNameLower = player.name.lowercased()
             let nameParts = playerNameLower.components(separatedBy: " ")
             let firstName = nameParts.first ?? playerNameLower
@@ -240,14 +240,14 @@ struct ShotTrackingView: View {
         
         // Fallbacks: last used player -> current user -> first player
         if targetPlayer == nil {
-            if let last = lastShotPlayer, game.players.contains(where: { $0.id == last.id }) {
+            if let last = lastShotPlayer, game.playersArray.contains(where: { $0.id == last.id }) {
                 targetPlayer = last
                 print("👤 Using last player: \(last.name)")
-            } else if let current = game.players.first(where: { $0.isCurrentUser }) {
+            } else if let current = game.playersArray.first(where: { $0.isCurrentUser }) {
                 targetPlayer = current
                 print("👤 Using current user: \(current.name)")
             } else {
-                targetPlayer = game.players.first
+                targetPlayer = game.playersArray.first
                 if let first = targetPlayer { print("👤 Defaulting to first player: \(first.name)") }
             }
         }
@@ -494,10 +494,12 @@ struct ShotTrackingView: View {
         if shotNum == 1 && shotDistance == nil {
             // Get hole distance from course
             if let course = game.course,
-               let hole = course.holes.first(where: { $0.holeNumber == holeNum }) {
-                if let white = hole.teeDistances.first(where: { $0.teeColor.lowercased() == "white" }) {
+               let holes = course.holes,
+               let hole = holes.first(where: { $0.holeNumber == holeNum }),
+               let teeDistances = hole.teeDistances {
+                if let white = teeDistances.first(where: { $0.teeColor.lowercased() == "white" }) {
                     shotDistance = white.distanceYards
-                } else if let first = hole.teeDistances.first {
+                } else if let first = teeDistances.first {
                     shotDistance = first.distanceYards
                 }
                 print("📍 Using hole distance: \(shotDistance!) yards")
@@ -687,12 +689,13 @@ struct ShotTrackingView: View {
         }
         
         // Update or create HoleScore for this hole
-        if let existingHole = game.holesScores.first(where: { $0.holeNumber == holeNumber }) {
+        if let existingHole = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }) {
             existingHole.setScore(for: player, score: shotsCount)
         } else {
             let newHoleScore = HoleScore(holeNumber: holeNumber)
             newHoleScore.setScore(for: player, score: shotsCount)
-            game.holesScores.append(newHoleScore)
+            if game.holesScores == nil { game.holesScores = [] }
+            game.holesScores!.append(newHoleScore)
             modelContext.insert(newHoleScore)
         }
         
@@ -701,8 +704,8 @@ struct ShotTrackingView: View {
             print("✅ Finalized score for \(player.name) on hole \(holeNumber): \(shotsCount)")
             
             // Advance current hole if all players have scores on this hole
-            let holeScore = game.holesScores.first(where: { $0.holeNumber == holeNumber })
-            let allPlayersScored = game.players.allSatisfy { p in
+            let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber })
+            let allPlayersScored = game.playersArray.allSatisfy { p in
                 holeScore?.scores[p.id] != nil
             }
             if allPlayersScored && currentHole == holeNumber && currentHole < 18 {
@@ -729,11 +732,13 @@ struct GameShotsView: View {
     // Hole yardage from the scorecard
     private var holeYardage: Int? {
         guard let course = course,
-              let hole = course.holes.first(where: { $0.holeNumber == selectedHole }) else { return nil }
-        if let white = hole.teeDistances.first(where: { $0.teeColor.lowercased() == "white" }) {
+              let holes = course.holes,
+              let hole = holes.first(where: { $0.holeNumber == selectedHole }),
+              let teeDistances = hole.teeDistances else { return nil }
+        if let white = teeDistances.first(where: { $0.teeColor.lowercased() == "white" }) {
             return white.distanceYards
         }
-        return hole.teeDistances.first?.distanceYards
+        return teeDistances.first?.distanceYards
     }
     
     var body: some View {

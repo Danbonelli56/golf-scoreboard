@@ -105,7 +105,7 @@ struct AddShotView: View {
             }
         }
         .onAppear {
-            selectedPlayer = player ?? game?.players.first
+            selectedPlayer = player ?? game?.playersArray.first
             
             // Set initial distance based on shot number
             if !initialDistanceSet && shotNumber == 1 {
@@ -118,12 +118,14 @@ struct AddShotView: View {
     private func setInitialDistance() {
         // For the first shot, use the hole's distance (length)
         guard let course = game?.course,
-              let hole = course.holes.first(where: { $0.holeNumber == holeNumber }) else {
+              let holes = course.holes,
+              let hole = holes.first(where: { $0.holeNumber == holeNumber }),
+              let teeDistances = hole.teeDistances else {
             return
         }
-        if let white = hole.teeDistances.first(where: { $0.teeColor.lowercased() == "white" }) {
+        if let white = teeDistances.first(where: { $0.teeColor.lowercased() == "white" }) {
             distanceToHole = "\(white.distanceYards)"
-        } else if let first = hole.teeDistances.first {
+        } else if let first = teeDistances.first {
             distanceToHole = "\(first.distanceYards)"
         }
     }

@@ -97,7 +97,7 @@ struct CourseDetailView: View {
     @State private var showingAddHole = false
     
     private var uniqueTeeColors: [String] {
-        let teeColors = Set(course.holes.flatMap { $0.teeDistances.map { $0.teeColor } })
+        let teeColors = Set((course.holes ?? []).flatMap { ($0.teeDistances ?? []).map { $0.teeColor } })
         return teeColors.sorted()
     }
     
@@ -112,7 +112,7 @@ struct CourseDetailView: View {
             }
             
             Section("Tee Distances") {
-                if course.holes.isEmpty {
+                if (course.holes ?? []).isEmpty {
                     Text("No holes defined")
                         .foregroundColor(.secondary)
                 } else {
@@ -123,11 +123,11 @@ struct CourseDetailView: View {
             }
             
             Section("Holes") {
-                if course.holes.isEmpty {
+                if (course.holes ?? []).isEmpty {
                     Text("No holes defined")
                         .foregroundColor(.secondary)
                 } else {
-                    ForEach(course.holes.sorted { $0.holeNumber < $1.holeNumber }, id: \.holeNumber) { hole in
+                    ForEach((course.holes ?? []).sorted { $0.holeNumber < $1.holeNumber }, id: \.holeNumber) { hole in
                         HoleRow(hole: hole)
                     }
                     .onDelete(perform: deleteHoles)
@@ -153,7 +153,7 @@ struct CourseDetailView: View {
     }
     
     private func deleteHoles(offsets: IndexSet) {
-        let sortedHoles = course.holes.sorted { $0.holeNumber < $1.holeNumber }
+        let sortedHoles = (course.holes ?? []).sorted { $0.holeNumber < $1.holeNumber }
         for index in offsets {
             modelContext.delete(sortedHoles[index])
         }
@@ -166,17 +166,17 @@ struct TeeDistanceSummary: View {
     let teeColor: String
     
     private var front9Total: Int {
-        course.holes.filter { $0.holeNumber <= 9 }
+        (course.holes ?? []).filter { $0.holeNumber <= 9 }
             .compactMap { hole in
-                hole.teeDistances.first(where: { $0.teeColor == teeColor })?.distanceYards
+                (hole.teeDistances ?? []).first(where: { $0.teeColor == teeColor })?.distanceYards
             }
             .reduce(0, +)
     }
     
     private var back9Total: Int {
-        course.holes.filter { $0.holeNumber > 9 }
+        (course.holes ?? []).filter { $0.holeNumber > 9 }
             .compactMap { hole in
-                hole.teeDistances.first(where: { $0.teeColor == teeColor })?.distanceYards
+                (hole.teeDistances ?? []).first(where: { $0.teeColor == teeColor })?.distanceYards
             }
             .reduce(0, +)
     }
@@ -224,9 +224,9 @@ struct HoleRow: View {
             }
             
             // Display tee distances
-            if !hole.teeDistances.isEmpty {
+            if !(hole.teeDistances ?? []).isEmpty {
                 HStack(spacing: 12) {
-                    ForEach(hole.teeDistances.sorted(by: { $0.teeColor < $1.teeColor }), id: \.teeColor) { tee in
+                    ForEach((hole.teeDistances ?? []).sorted(by: { $0.teeColor < $1.teeColor }), id: \.teeColor) { tee in
                         HStack(spacing: 4) {
                             Text(tee.teeColor.capitalized)
                                 .font(.caption2)

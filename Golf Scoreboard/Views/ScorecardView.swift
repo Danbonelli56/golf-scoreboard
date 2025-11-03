@@ -206,7 +206,7 @@ struct ScorecardView: View {
         }
         
         print("🔍 Parsing: '\(text)'")
-        print("🎮 Game has \(game.players.count) players: \(game.players.map { $0.name })")
+        print("🎮 Game has \(game.playersArray.count) players: \(game.playersArray.map { $0.name })")
         
         let lowerText = text.lowercased()
         
@@ -246,7 +246,8 @@ struct ScorecardView: View {
         // Find the par for this hole
         guard let targetHoleNumber = holeNumber,
               let course = game.course,
-              let hole = course.holes.first(where: { $0.holeNumber == targetHoleNumber }) else {
+              let holes = course.holes,
+              let hole = holes.first(where: { $0.holeNumber == targetHoleNumber }) else {
             print("❌ No course or hole found")
             return
         }
@@ -255,7 +256,7 @@ struct ScorecardView: View {
         print("⛳ Hole \(targetHoleNumber) is par \(par)")
         
         // Parse each player's score
-        for player in game.players {
+        for player in game.playersArray {
             let playerNameLower = player.name.lowercased()
             
             // Extract first and last name from full name
@@ -328,14 +329,14 @@ struct ScorecardView: View {
     private func findFirstEmptyHole(game: Game) -> Int? {
         // Check holes 1-18 to find the first one with no scores entered
         for holeNumber in 1...18 {
-            let holeScore = game.holesScores.first(where: { $0.holeNumber == holeNumber })
+            let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber })
             // If no hole score entry exists, or all players have no score for this hole
             if holeScore == nil || holeScore!.scores.isEmpty {
                 return holeNumber
             }
             // Check if any player is missing a score for this hole
             var allPlayersHaveScores = true
-            for player in game.players {
+            for player in game.playersArray {
                 if holeScore!.scores[player.id] == nil {
                     allPlayersHaveScores = false
                     break
@@ -358,14 +359,15 @@ struct ScorecardView: View {
     }
     
     private func updateHoleScore(game: Game, holeNumber: Int, player: Player, score: Int) {
-        if let existingHole = game.holesScores.first(where: { $0.holeNumber == holeNumber }) {
+        if let existingHole = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }) {
             print("  📝 Updating existing hole score")
             existingHole.setScore(for: player, score: score)
         } else {
             print("  📝 Creating new hole score")
             let newHoleScore = HoleScore(holeNumber: holeNumber)
             newHoleScore.setScore(for: player, score: score)
-            game.holesScores.append(newHoleScore)
+            if game.holesScores == nil { game.holesScores = [] }
+            game.holesScores!.append(newHoleScore)
             modelContext.insert(newHoleScore)
         }
         
@@ -375,8 +377,8 @@ struct ScorecardView: View {
             
             // If this is the current hole, advance to next hole after all players have scores
             if holeNumber == currentHole {
-                let holeScore = game.holesScores.first(where: { $0.holeNumber == holeNumber })
-                let allPlayersScored = game.players.allSatisfy { player in
+                let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber })
+                let allPlayersScored = game.playersArray.allSatisfy { player in
                     holeScore?.scores[player.id] != nil
                 }
                 

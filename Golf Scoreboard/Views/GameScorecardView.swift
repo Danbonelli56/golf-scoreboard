@@ -35,7 +35,7 @@ struct GameScorecardView: View {
                 Divider()
                 
                 // Player columns
-                if game.players.isEmpty {
+                if game.playersArray.isEmpty {
                     Text("No players in this game")
                         .foregroundColor(.secondary)
                         .padding()
@@ -43,25 +43,25 @@ struct GameScorecardView: View {
                     // Header row with Par/HCP and player names
                     HStack(spacing: 0) {
                         Text("Hole")
-                            .frame(width: 40)
-                            .font(.caption)
-                            .fontWeight(.semibold)
+                        .frame(width: 40)
+                        .font(.caption)
+                        .fontWeight(.semibold)
                         
                         Text("Par")
-                            .frame(width: 35)
-                            .font(.caption)
-                            .fontWeight(.semibold)
+                        .frame(width: 35)
+                        .font(.caption)
+                        .fontWeight(.semibold)
                         
                         Text("HCP")
-                            .frame(width: 30)
+                        .frame(width: 30)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        
+                        ForEach(game.playersArray) { player in
+                            Text(firstName(from: player.name))
+                            .frame(maxWidth: .infinity)
                             .font(.caption)
                             .fontWeight(.semibold)
-                        
-                        ForEach(game.players) { player in
-                            Text(firstName(from: player.name))
-                                .frame(maxWidth: .infinity)
-                                .font(.caption)
-                                .fontWeight(.semibold)
                         }
                     }
                     .padding(.vertical, 8)
@@ -113,7 +113,7 @@ struct HoleScoreRow: View {
                 .foregroundColor(.secondary)
             
             // Player scores
-            ForEach(game.players) { player in
+            ForEach(game.playersArray) { player in
                 let score = getScore(for: player)
                 Text(score.map { "\($0)" } ?? "-")
                     .frame(maxWidth: .infinity)
@@ -133,21 +133,21 @@ struct HoleScoreRow: View {
     }
     
     private var parText: String {
-        if let hole = course?.holes.first(where: { $0.holeNumber == holeNumber }) {
+        if let holes = course?.holes, let hole = holes.first(where: { $0.holeNumber == holeNumber }) {
             return "\(hole.par)"
         }
         return "-"
     }
     
     private var hcpText: String {
-        if let hole = course?.holes.first(where: { $0.holeNumber == holeNumber }) {
+        if let holes = course?.holes, let hole = holes.first(where: { $0.holeNumber == holeNumber }) {
             return "\(hole.mensHandicap)"
         }
         return "-"
     }
     
     private func getScore(for player: Player) -> Int? {
-        game.holesScores.first(where: { $0.holeNumber == holeNumber })?.scores[player.id]
+        game.holesScoresArray.first(where: { $0.holeNumber == holeNumber })?.scores[player.id]
     }
     
     private func scoreColor(for score: Int?) -> Color {
@@ -202,7 +202,7 @@ struct ScoreEditorView: View {
     var body: some View {
         NavigationView {
             List {
-                ForEach(game.players) { player in
+                ForEach(game.playersArray) { player in
                     ScoreEditorRow(holeNumber: holeNumber, game: game, player: player)
                 }
             }
@@ -231,7 +231,7 @@ struct ScoreEditorRow: View {
         self.holeNumber = holeNumber
         self.game = game
         self.player = player
-        if let holeScore = game.holesScores.first(where: { $0.holeNumber == holeNumber }),
+        if let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }),
            let score = holeScore.scores[player.id] {
             _scoreText = State(initialValue: "\(score)")
         } else {
@@ -259,12 +259,13 @@ struct ScoreEditorRow: View {
     private func saveScore() {
         guard let score = Int(scoreText) else { return }
         
-        if let existingHole = game.holesScores.first(where: { $0.holeNumber == holeNumber }) {
+        if let existingHole = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }) {
             existingHole.setScore(for: player, score: score)
         } else {
             let newHoleScore = HoleScore(holeNumber: holeNumber)
             newHoleScore.setScore(for: player, score: score)
-            game.holesScores.append(newHoleScore)
+            if game.holesScores == nil { game.holesScores = [] }
+            game.holesScores!.append(newHoleScore)
             modelContext.insert(newHoleScore)
         }
         
@@ -272,8 +273,8 @@ struct ScoreEditorRow: View {
         
         // If this is the current hole, advance to next hole after all players have scores
         if holeNumber == currentHole {
-            let holeScore = game.holesScores.first(where: { $0.holeNumber == holeNumber })
-            let allPlayersScored = game.players.allSatisfy { player in
+            let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber })
+            let allPlayersScored = game.playersArray.allSatisfy { player in
                 holeScore?.scores[player.id] != nil
             }
             

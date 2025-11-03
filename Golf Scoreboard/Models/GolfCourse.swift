@@ -15,8 +15,8 @@ final class GolfCourse {
     var location: String?
     var slope: Int = 113
     var rating: Double = 72.0
-    @Relationship(deleteRule: .cascade) var holes: [Hole] = []
-    @Relationship(deleteRule: .cascade) var teeSets: [TeeSet] = []
+    @Relationship(deleteRule: .cascade, inverse: \Hole.course) var holes: [Hole]?
+    @Relationship(deleteRule: .cascade, inverse: \TeeSet.course) var teeSets: [TeeSet]?
     var games: [Game]?
     var createdAt: Date = Date()
     
@@ -53,7 +53,7 @@ final class Hole {
     var par: Int = 4
     var mensHandicap: Int = 10
     var ladiesHandicap: Int?
-    @Relationship(deleteRule: .cascade) var teeDistances: [TeeDistance] = []
+    @Relationship(deleteRule: .cascade, inverse: \TeeDistance.hole) var teeDistances: [TeeDistance]?
     
     init(holeNumber: Int, par: Int, mensHandicap: Int, ladiesHandicap: Int? = nil) {
         self.holeNumber = holeNumber
