@@ -21,7 +21,7 @@ struct Golf_ScoreboardApp: App {
             HoleScore.self,
             Shot.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .automatic)
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
 
         do {
             let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
