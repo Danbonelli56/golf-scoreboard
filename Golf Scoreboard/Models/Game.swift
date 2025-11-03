@@ -10,11 +10,12 @@ import SwiftData
 
 @Model
 final class Game {
-    var id: UUID
+    var id: UUID = UUID()
     var course: GolfCourse?
-    var date: Date
-    @Relationship(deleteRule: .nullify) var players: [Player]
-    @Relationship(deleteRule: .cascade) var holesScores: [HoleScore]
+    @Relationship(deleteRule: .nullify, inverse: \Player.games) var players: [Player] = []
+    @Relationship(deleteRule: .cascade, inverse: \HoleScore.game) var holesScores: [HoleScore] = []
+    @Relationship(deleteRule: .cascade, inverse: \Shot.game) var shots: [Shot] = []
+    var date: Date = Date()
     var createdAt: Date?
     
     init(course: GolfCourse? = nil, players: [Player] = []) {
@@ -64,9 +65,9 @@ final class Game {
 @Model
 final class HoleScore {
     var game: Game?
-    var holeNumber: Int
-    var createdAt: Date
-    @Relationship(deleteRule: .cascade) var playerScores: [PlayerScore]
+    var holeNumber: Int = 1
+    var createdAt: Date = Date()
+    @Relationship(deleteRule: .cascade, inverse: \PlayerScore.holeScore) var playerScores: [PlayerScore] = []
     
     init(holeNumber: Int) {
         self.holeNumber = holeNumber
@@ -124,7 +125,7 @@ final class HoleScore {
 final class PlayerScore {
     var holeScore: HoleScore?
     var player: Player?
-    var score: Int
+    var score: Int = 0
     
     init(player: Player? = nil, score: Int = 0) {
         self.player = player

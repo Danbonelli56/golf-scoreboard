@@ -10,14 +10,15 @@ import SwiftData
 
 @Model
 final class GolfCourse {
-    var id: UUID
-    @Attribute(.unique) var name: String
+    var id: UUID = UUID()
+    var name: String = ""
     var location: String?
-    var slope: Int
-    var rating: Double
-    @Relationship(deleteRule: .cascade) var holes: [Hole]
-    @Relationship(deleteRule: .cascade) var teeSets: [TeeSet]
-    var createdAt: Date
+    var slope: Int = 113
+    var rating: Double = 72.0
+    @Relationship(deleteRule: .cascade, inverse: \Hole.course) var holes: [Hole] = []
+    @Relationship(deleteRule: .cascade, inverse: \TeeSet.course) var teeSets: [TeeSet] = []
+    @Relationship(deleteRule: .nullify, inverse: \Game.course) var games: [Game]?
+    var createdAt: Date = Date()
     
     init(name: String, location: String? = nil, slope: Int = 113, rating: Double = 72.0) {
         self.id = UUID()
@@ -34,9 +35,9 @@ final class GolfCourse {
 @Model
 final class TeeSet {
     var course: GolfCourse?
-    var teeColor: String
-    var slope: Double
-    var rating: Double
+    var teeColor: String = ""
+    var slope: Double = 0.0
+    var rating: Double = 0.0
     
     init(teeColor: String, slope: Double, rating: Double) {
         self.teeColor = teeColor
@@ -48,11 +49,11 @@ final class TeeSet {
 @Model
 final class Hole {
     var course: GolfCourse?
-    var holeNumber: Int
-    var par: Int
-    var mensHandicap: Int
+    var holeNumber: Int = 1
+    var par: Int = 4
+    var mensHandicap: Int = 10
     var ladiesHandicap: Int?
-    @Relationship(deleteRule: .cascade) var teeDistances: [TeeDistance]
+    @Relationship(deleteRule: .cascade, inverse: \TeeDistance.hole) var teeDistances: [TeeDistance] = []
     
     init(holeNumber: Int, par: Int, mensHandicap: Int, ladiesHandicap: Int? = nil) {
         self.holeNumber = holeNumber
@@ -66,8 +67,8 @@ final class Hole {
 @Model
 final class TeeDistance {
     var hole: Hole?
-    var teeColor: String // "red", "white", "blue", "black", "gold", "green", etc.
-    var distanceYards: Int
+    var teeColor: String = ""
+    var distanceYards: Int = 0
     
     init(teeColor: String, distanceYards: Int) {
         self.teeColor = teeColor

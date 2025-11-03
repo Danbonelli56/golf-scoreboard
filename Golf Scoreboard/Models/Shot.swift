@@ -22,14 +22,14 @@ enum ShotResult: String, Codable, CaseIterable {
 final class Shot {
     var game: Game?
     var player: Player?
-    var holeNumber: Int
-    var shotNumber: Int
+    var holeNumber: Int = 1
+    var shotNumber: Int = 1
     var distanceToHole: Int? // in yards (distance remaining to hole)
     var originalDistanceFeet: Int? // original feet value if input was in feet (for putts)
     var club: String?
-    var result: String // ShotResult as string
-    var isPutt: Bool
-    var createdAt: Date
+    var result: String = "Straight" // ShotResult as string
+    var isPutt: Bool = false
+    var createdAt: Date = Date()
     var distanceTraveled: Int? // in yards (how far the shot actually traveled)
     var isPenalty: Bool = false // true if this shot resulted in a penalty (hazard, OB, etc.)
     var isRetaking: Bool = false // true if retaking from tee (vs taking a drop)
