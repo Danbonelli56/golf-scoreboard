@@ -13,12 +13,13 @@ struct StatisticsChartView: View {
     @Query private var players: [Player]
     @Query private var shots: [Shot]
     @Query private var games: [Game]
+    @AppStorage("selectedGameID") private var selectedGameIDString: String = ""
     
     var body: some View {
         List {
             ForEach(players) { player in
                 Section(header: Text(player.name).font(.headline)) {
-                    PlayerChartsSection(player: player)
+                    PlayerChartsSection(player: player, selectedGameIDString: selectedGameIDString)
                 }
             }
         }
@@ -27,14 +28,32 @@ struct StatisticsChartView: View {
 
 struct PlayerChartsSection: View {
     let player: Player
+    let selectedGameIDString: String
     @Query private var shots: [Shot]
     @Query private var games: [Game]
+    @State private var showCurrentRoundOnly = false
     
     var body: some View {
         let playerShots = shots.filter { $0.player?.id == player.id }
         let playerGames = games.filter { $0.playersArray.contains(where: { $0.id == player.id }) }
         let sortedGames = playerGames.sorted(by: { $0.date > $1.date })
         let stats = ShotStatistics.calculateStatistics(for: player, shots: shots)
+        
+        // Toggle between all games and current round
+        Picker("View", selection: $showCurrentRoundOnly) {
+            Text("All Games").tag(false)
+            Text("Current Round").tag(true)
+        }
+        .pickerStyle(.segmented)
+        .padding(.vertical, 8)
+        
+        // Determine which games to use
+        let gamesToShow: [Game] = {
+            if showCurrentRoundOnly, !selectedGameIDString.isEmpty, let gameID = UUID(uuidString: selectedGameIDString) {
+                return games.filter { $0.id == gameID }
+            }
+            return sortedGames
+        }()
         
         // Show trend chart for each club with enough data
         let clubStats = stats.filter({ !$0.value.isPutter && !$0.value.distances.isEmpty })
@@ -43,13 +62,13 @@ struct PlayerChartsSection: View {
             if club2 == "Driver" { return false }
             return club1 < club2
         }), id: \.self) { club in
-            ClubTrendChart(player: player, club: club, games: sortedGames)
+            ClubTrendChart(player: player, club: club, games: gamesToShow, showPerHole: showCurrentRoundOnly)
         }
         
         // Putter stats per game chart
         let putterShots = playerShots.filter({ $0.isPutt && $0.club?.lowercased() == "putter" })
         if !putterShots.isEmpty && !playerGames.isEmpty {
-            PutterTrendChart(player: player, games: sortedGames)
+            PutterTrendChart(player: player, games: gamesToShow, showPerHole: showCurrentRoundOnly)
         }
     }
 }
@@ -58,19 +77,20 @@ struct ClubTrendChart: View {
     let player: Player
     let club: String
     let games: [Game]
+    let showPerHole: Bool
     @Query private var shots: [Shot]
     
     var body: some View {
-        let gameData = calculateClubDistancePerGame()
+        let gameData = showPerHole ? calculateClubDistancePerHole() : calculateClubDistancePerGame()
         
         VStack(alignment: .leading, spacing: 8) {
-            Text("\(club) Distance Trend")
+            Text(showPerHole ? "\(club) Distance (This Round)" : "\(club) Distance Trend")
                 .font(.subheadline)
                 .fontWeight(.semibold)
             
             Chart(gameData, id: \.gameName) { data in
                 LineMark(
-                    x: .value("Game", data.gameName),
+                    x: .value(showPerHole ? "Hole" : "Game", data.gameName),
                     y: .value("Distance", data.averageDistance)
                 )
                 .foregroundStyle(.blue.gradient)
@@ -104,7 +124,7 @@ struct ClubTrendChart: View {
                 }
             }
             
-            Text("Average distance in yards per game")
+            Text(showPerHole ? "Average distance per hole in yards" : "Average distance in yards per game")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -138,6 +158,45 @@ struct ClubTrendChart: View {
         return dataPoints
     }
     
+    private func calculateClubDistancePerHole() -> [ClubGameData] {
+        var dataPoints: [ClubGameData] = []
+        
+        guard let game = games.first else { return dataPoints }
+        
+        // Calculate overall average
+        let allClubShots = shots.filter { $0.player?.id == player.id && $0.club?.lowercased() == club.lowercased() && !$0.isPutt }
+        let overallAverage = calculateAverageDistance(from: allClubShots)
+        
+        // Get all shots for this game, player, and club
+        let gameShots = shots.filter { 
+            guard let shotGameID = $0.game?.id else { return false }
+            return shotGameID == game.id && $0.player?.id == player.id && $0.club?.lowercased() == club.lowercased() && !$0.isPutt
+        }
+        
+        // Group by hole
+        var holeDistances: [Int: [Int]] = [:]
+        for shot in gameShots {
+            if let distance = shot.distanceTraveled, distance > 0 {
+                holeDistances[shot.holeNumber, default: []].append(distance)
+            }
+        }
+        
+        // Create data points for each hole
+        let sortedHoles = holeDistances.keys.sorted()
+        for holeNum in sortedHoles {
+            if let distances = holeDistances[holeNum] {
+                let avgDistance = Double(distances.reduce(0, +)) / Double(distances.count)
+                dataPoints.append(ClubGameData(
+                    gameName: "Hole \(holeNum)",
+                    averageDistance: avgDistance,
+                    overallAverage: overallAverage
+                ))
+            }
+        }
+        
+        return dataPoints
+    }
+    
     private func calculateAverageDistance(from shots: [Shot]) -> Double {
         let distances = shots.compactMap { $0.distanceTraveled }.filter { $0 > 0 }
         guard !distances.isEmpty else { return 0.0 }
@@ -148,19 +207,20 @@ struct ClubTrendChart: View {
 struct PutterTrendChart: View {
     let player: Player
     let games: [Game]
+    let showPerHole: Bool
     @Query private var shots: [Shot]
     
     var body: some View {
-        let gamePuttsData = calculatePuttStatsPerGame()
+        let gamePuttsData = showPerHole ? calculatePuttStatsPerHole() : calculatePuttStatsPerGame()
         
         VStack(alignment: .leading, spacing: 8) {
-            Text("Putts Per Hole (Per Game)")
+            Text(showPerHole ? "Putts Per Hole (This Round)" : "Putts Per Hole (Per Game)")
                 .font(.subheadline)
                 .fontWeight(.semibold)
             
             Chart(gamePuttsData, id: \.gameName) { data in
                 LineMark(
-                    x: .value("Game", data.gameName),
+                    x: .value(showPerHole ? "Hole" : "Game", data.gameName),
                     y: .value("Putts/Hole", data.puttsPerHole)
                 )
                 .foregroundStyle(.green.gradient)
@@ -236,6 +296,47 @@ struct PutterTrendChart: View {
                     overallAverage: overallAverage
                 ))
             }
+        }
+        
+        return dataPoints
+    }
+    
+    private func calculatePuttStatsPerHole() -> [GamePuttData] {
+        var dataPoints: [GamePuttData] = []
+        
+        guard let game = games.first else { return dataPoints }
+        
+        // Get all putts for this game and player
+        let gameShots = shots.filter { 
+            guard let shotGameID = $0.game?.id else { return false }
+            return shotGameID == game.id && $0.player?.id == player.id && $0.isPutt && $0.club?.lowercased() == "putter"
+        }
+        
+        // Calculate overall average for reference
+        let allPutterShots = shots.filter { $0.player?.id == player.id && $0.isPutt && $0.club?.lowercased() == "putter" }
+        var allHoles: Set<Int> = []
+        var allTotalPutts = 0
+        for shot in allPutterShots {
+            allHoles.insert(shot.holeNumber)
+            allTotalPutts += 1
+        }
+        let overallAverage = allHoles.isEmpty ? 0.0 : Double(allTotalPutts) / Double(allHoles.count)
+        
+        // Group putts by hole
+        var puttsByHole: [Int: Int] = [:]
+        for shot in gameShots {
+            puttsByHole[shot.holeNumber, default: 0] += 1
+        }
+        
+        // Create data points for each hole
+        let sortedHoles = puttsByHole.keys.sorted()
+        for holeNum in sortedHoles {
+            let puttsForHole = puttsByHole[holeNum] ?? 0
+            dataPoints.append(GamePuttData(
+                gameName: "Hole \(holeNum)",
+                puttsPerHole: Double(puttsForHole),
+                overallAverage: overallAverage
+            ))
         }
         
         return dataPoints
