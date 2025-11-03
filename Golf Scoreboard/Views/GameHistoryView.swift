@@ -17,13 +17,13 @@ struct GameHistoryView: View {
     var completedGames: [Game] {
         allGames.filter { game in
             // A game is considered complete if all holes have scores for all players
-            guard !game.players.isEmpty else { return false }
+            guard !game.playersArray.isEmpty else { return false }
             
             for holeNum in 1...18 {
-                guard let holeScore = game.holesScores.first(where: { $0.holeNumber == holeNum }) else {
+                guard let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNum }) else {
                     return false
                 }
-                for player in game.players {
+                for player in game.playersArray {
                     if holeScore.scores[player.id] == nil {
                         return false
                     }
@@ -104,7 +104,7 @@ struct GameHistoryRow: View {
             }
             
             // Players and scores
-            ForEach(game.players) { player in
+            ForEach(game.playersArray) { player in
                 HStack {
                     Text(player.name)
                         .font(.subheadline)

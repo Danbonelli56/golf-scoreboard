@@ -376,7 +376,7 @@ struct ShotTrackingView: View {
         let isShort = lowerText.contains("short") || lowerText.contains("short of the pin") || lowerText.contains("short of the green")
         
         // Detect penalties and retaking
-        var isPenalty = result == .outOfBounds || result == .hazard
+        let isPenalty = result == .outOfBounds || result == .hazard
         var isRetaking = false
         
         // Check if this is a retaking from tee (driver or tee mentioned, "hit again", or "here again")
@@ -622,7 +622,7 @@ struct ShotTrackingView: View {
         
         if isSunkPuttCommand {
             // Determine player from pending shot or fallback
-            let targetPlayer = pendingShot?.player ?? lastShotPlayer ?? game.players.first(where: { $0.isCurrentUser }) ?? game.players.first
+            let targetPlayer = pendingShot?.player ?? lastShotPlayer ?? game.playersArray.first(where: { $0.isCurrentUser }) ?? game.playersArray.first
             
             if let player = targetPlayer {
                 let gameID = game.id
