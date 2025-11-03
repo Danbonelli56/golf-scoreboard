@@ -11,52 +11,67 @@ import SwiftData
 struct ShotStatisticsView: View {
     @Query private var players: [Player]
     @Query private var shots: [Shot]
+    @State private var selectedTab = 0
     
     var body: some View {
         NavigationView {
-            List {
-                ForEach(players) { player in
-                    Section(header: Text(player.name).font(.headline)) {
-                        let stats = ShotStatistics.calculateStatistics(for: player, shots: shots)
-                        let overall = ShotStatistics.getOverallStats(for: player, shots: shots)
-                        
-                        // Overall stats
-                        HStack {
-                            Text("Total Shots Tracked")
-                            Spacer()
-                            Text("\(overall.totalShots)")
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        HStack {
-                            Text("Average Distance")
-                            Spacer()
-                            Text("\(Int(overall.averageDistance)) yds")
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        // Stats by club
-                        if !stats.isEmpty {
-                            Divider()
+            TabView(selection: $selectedTab) {
+                // Summary View
+                List {
+                    ForEach(players) { player in
+                        Section(header: Text(player.name).font(.headline)) {
+                            let stats = ShotStatistics.calculateStatistics(for: player, shots: shots)
+                            let overall = ShotStatistics.getOverallStats(for: player, shots: shots)
                             
-                            ForEach(Array(stats.keys.sorted { club1, club2 in
-                                // Put Driver first
-                                if club1 == "Driver" { return true }
-                                if club2 == "Driver" { return false }
-                                // Then sort alphabetically
-                                return club1 < club2
-                            }), id: \.self) { club in
-                                if let clubStats = stats[club] {
-                                    ClubStatsRow(stats: clubStats)
-                                }
+                            // Overall stats
+                            HStack {
+                                Text("Total Shots Tracked")
+                                Spacer()
+                                Text("\(overall.totalShots)")
+                                    .foregroundColor(.secondary)
                             }
-                        } else {
-                            Text("No shot data available")
-                                .foregroundColor(.secondary)
-                                .italic()
+                            
+                            HStack {
+                                Text("Average Distance")
+                                Spacer()
+                                Text("\(Int(overall.averageDistance)) yds")
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            // Stats by club
+                            if !stats.isEmpty {
+                                Divider()
+                                
+                                ForEach(Array(stats.keys.sorted { club1, club2 in
+                                    // Put Driver first
+                                    if club1 == "Driver" { return true }
+                                    if club2 == "Driver" { return false }
+                                    // Then sort alphabetically
+                                    return club1 < club2
+                                }), id: \.self) { club in
+                                    if let clubStats = stats[club] {
+                                        ClubStatsRow(stats: clubStats)
+                                    }
+                                }
+                            } else {
+                                Text("No shot data available")
+                                    .foregroundColor(.secondary)
+                                    .italic()
+                            }
                         }
                     }
                 }
+                .tabItem {
+                    Label("Summary", systemImage: "list.bullet")
+                }
+                .tag(0)
+                
+                // Charts View
+                StatisticsChartView()
+                    .tabItem {
+                        Label("Charts", systemImage: "chart.line.uptrend.xyaxis")
+                    }
+                    .tag(1)
             }
             .navigationTitle("Shot Statistics")
         }
