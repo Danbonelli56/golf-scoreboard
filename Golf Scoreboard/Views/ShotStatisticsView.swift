@@ -39,7 +39,13 @@ struct ShotStatisticsView: View {
                         if !stats.isEmpty {
                             Divider()
                             
-                            ForEach(Array(stats.keys.sorted()), id: \.self) { club in
+                            ForEach(Array(stats.keys.sorted { club1, club2 in
+                                // Put Driver first
+                                if club1 == "Driver" { return true }
+                                if club2 == "Driver" { return false }
+                                // Then sort alphabetically
+                                return club1 < club2
+                            }), id: \.self) { club in
                                 if let clubStats = stats[club] {
                                     ClubStatsRow(stats: clubStats)
                                 }
