@@ -688,9 +688,10 @@ struct ShotTrackingView: View {
         
         // Update or create HoleScore for this hole
         if let existingHole = game.holesScores.first(where: { $0.holeNumber == holeNumber }) {
-            existingHole.scores[player.id] = shotsCount
+            existingHole.setScore(for: player, score: shotsCount)
         } else {
-            let newHoleScore = HoleScore(holeNumber: holeNumber, scores: [player.id: shotsCount])
+            let newHoleScore = HoleScore(holeNumber: holeNumber)
+            newHoleScore.setScore(for: player, score: shotsCount)
             game.holesScores.append(newHoleScore)
             modelContext.insert(newHoleScore)
         }

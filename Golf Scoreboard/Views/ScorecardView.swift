@@ -360,10 +360,11 @@ struct ScorecardView: View {
     private func updateHoleScore(game: Game, holeNumber: Int, player: Player, score: Int) {
         if let existingHole = game.holesScores.first(where: { $0.holeNumber == holeNumber }) {
             print("  📝 Updating existing hole score")
-            existingHole.scores[player.id] = score
+            existingHole.setScore(for: player, score: score)
         } else {
             print("  📝 Creating new hole score")
-            let newHoleScore = HoleScore(holeNumber: holeNumber, scores: [player.id: score])
+            let newHoleScore = HoleScore(holeNumber: holeNumber)
+            newHoleScore.setScore(for: player, score: score)
             game.holesScores.append(newHoleScore)
             modelContext.insert(newHoleScore)
         }

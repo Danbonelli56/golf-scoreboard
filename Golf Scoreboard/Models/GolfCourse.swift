@@ -10,7 +10,7 @@ import SwiftData
 
 @Model
 final class GolfCourse {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     @Attribute(.unique) var name: String
     var location: String?
     var slope: Int

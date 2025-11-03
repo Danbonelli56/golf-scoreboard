@@ -260,9 +260,10 @@ struct ScoreEditorRow: View {
         guard let score = Int(scoreText) else { return }
         
         if let existingHole = game.holesScores.first(where: { $0.holeNumber == holeNumber }) {
-            existingHole.scores[player.id] = score
+            existingHole.setScore(for: player, score: score)
         } else {
-            let newHoleScore = HoleScore(holeNumber: holeNumber, scores: [player.id: score])
+            let newHoleScore = HoleScore(holeNumber: holeNumber)
+            newHoleScore.setScore(for: player, score: score)
             game.holesScores.append(newHoleScore)
             modelContext.insert(newHoleScore)
         }

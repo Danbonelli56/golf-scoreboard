@@ -10,7 +10,7 @@ import SwiftData
 
 @Model
 final class Player {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var name: String
     var handicap: Double
     var isCurrentUser: Bool

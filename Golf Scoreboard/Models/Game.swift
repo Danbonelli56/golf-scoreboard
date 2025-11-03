@@ -10,7 +10,7 @@ import SwiftData
 
 @Model
 final class Game {
-    @Attribute(.unique) var id: UUID
+    var id: UUID
     var course: GolfCourse?
     var date: Date
     @Relationship(deleteRule: .nullify) var players: [Player]
@@ -65,13 +65,70 @@ final class Game {
 final class HoleScore {
     var game: Game?
     var holeNumber: Int
-    var scores: [UUID: Int] // Player ID to Score
     var createdAt: Date
+    @Relationship(deleteRule: .cascade) var playerScores: [PlayerScore]
     
-    init(holeNumber: Int, scores: [UUID: Int] = [:]) {
+    init(holeNumber: Int) {
         self.holeNumber = holeNumber
-        self.scores = scores
+        self.playerScores = []
         self.createdAt = Date()
+    }
+    
+    // Computed property for backward compatibility
+    var scores: [UUID: Int] {
+        var result: [UUID: Int] = [:]
+        for playerScore in playerScores {
+            if let playerId = playerScore.player?.id {
+                result[playerId] = playerScore.score
+            }
+        }
+        return result
+    }
+    
+    // Subscript for backward compatibility
+    subscript(playerId: UUID) -> Int? {
+        get {
+            return scores[playerId]
+        }
+        set {
+            if let newValue = newValue {
+                // Find or create PlayerScore for this player
+                if let existingPlayerScore = playerScores.first(where: { $0.player?.id == playerId }) {
+                    existingPlayerScore.score = newValue
+                } else {
+                    // Need to find the player to create the relationship
+                    // This will be handled by the caller providing the context
+                }
+            } else {
+                // Remove the player score
+                if let index = playerScores.firstIndex(where: { $0.player?.id == playerId }) {
+                    playerScores.remove(at: index)
+                }
+            }
+        }
+    }
+    
+    // Helper method to set score with player reference
+    func setScore(for player: Player, score: Int) {
+        if let existingPlayerScore = playerScores.first(where: { $0.player?.id == player.id }) {
+            existingPlayerScore.score = score
+        } else {
+            let playerScore = PlayerScore(player: player, score: score)
+            playerScore.holeScore = self
+            playerScores.append(playerScore)
+        }
+    }
+}
+
+@Model
+final class PlayerScore {
+    var holeScore: HoleScore?
+    var player: Player?
+    var score: Int
+    
+    init(player: Player? = nil, score: Int = 0) {
+        self.player = player
+        self.score = score
     }
 }
 
