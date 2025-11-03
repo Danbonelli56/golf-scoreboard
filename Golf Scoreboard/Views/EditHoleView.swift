@@ -23,12 +23,12 @@ struct EditHoleView: View {
         NavigationView {
             Form {
                 Section("Existing Tee Distances") {
-                    if hole.teeDistances.isEmpty {
+                    if (hole.teeDistances ?? []).isEmpty {
                         Text("No tee distances added yet")
                             .foregroundColor(.secondary)
                             .font(.caption)
                     } else {
-                        ForEach(hole.teeDistances.sorted(by: { $0.teeColor < $1.teeColor }), id: \.teeColor) { tee in
+                        ForEach((hole.teeDistances ?? []).sorted(by: { $0.teeColor < $1.teeColor }), id: \.teeColor) { tee in
                             HStack {
                                 Text(tee.teeColor.capitalized)
                                     .foregroundColor(.blue)
@@ -80,12 +80,13 @@ struct EditHoleView: View {
         guard let yards = Int(distanceYards) else { return }
         
         // Check if this tee color already exists for this hole
-        if let existingTee = hole.teeDistances.first(where: { $0.teeColor.lowercased() == teeColor.lowercased() }) {
+        if let existingTee = (hole.teeDistances ?? []).first(where: { $0.teeColor.lowercased() == teeColor.lowercased() }) {
             existingTee.distanceYards = yards
         } else {
             let newTee = TeeDistance(teeColor: teeColor, distanceYards: yards)
             newTee.hole = hole
-            hole.teeDistances.append(newTee)
+            if hole.teeDistances == nil { hole.teeDistances = [] }
+            hole.teeDistances!.append(newTee)
             modelContext.insert(newTee)
         }
         
@@ -94,7 +95,8 @@ struct EditHoleView: View {
     }
     
     private func deleteTee(_ tee: TeeDistance) {
-        hole.teeDistances.removeAll { $0.teeColor == tee.teeColor }
+        if hole.teeDistances == nil { hole.teeDistances = [] }
+        hole.teeDistances!.removeAll { $0.teeColor == tee.teeColor }
         modelContext.delete(tee)
         try? modelContext.save()
     }
