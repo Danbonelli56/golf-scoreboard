@@ -20,8 +20,8 @@ enum ShotResult: String, Codable, CaseIterable {
 
 @Model
 final class Shot {
-    var game: Game?
-    var player: Player?
+    @Relationship(inverse: \Game.shots) var game: Game?
+    @Relationship(inverse: \Player.shots) var player: Player?
     var holeNumber: Int = 1
     var shotNumber: Int = 1
     var distanceToHole: Int? // in yards (distance remaining to hole)
