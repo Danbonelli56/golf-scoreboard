@@ -42,6 +42,11 @@ struct MainTabView: View {
                 .tabItem {
                     Label("Players", systemImage: "person.3")
                 }
+            
+            TutorialView()
+                .tabItem {
+                    Label("Tutorial", systemImage: "book.fill")
+                }
         }
     }
 }
