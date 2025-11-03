@@ -92,6 +92,15 @@ struct TutorialView: View {
                         TutorialExample(phrase: "Dave hole 3 score 5", description: "Alternative format")
                     }
                     
+                    // Settings & Setup
+                    SectionCard(title: "Settings & Setup", icon: "gearshape.fill", color: .gray) {
+                        TutorialBullet(text: "Manage all courses and players in Settings")
+                        TutorialBullet(text: "Add courses with default 18-hole configuration")
+                        TutorialBullet(text: "Add players and set one as 'Current User'")
+                        TutorialBullet(text: "Edit course details including slope and rating")
+                        TutorialBullet(text: "Track players with handicaps")
+                    }
+                    
                     // Tips
                     SectionCard(title: "Pro Tips", icon: "lightbulb.fill", color: .yellow) {
                         TutorialBullet(text: "Speak clearly and at a normal pace")
@@ -99,6 +108,7 @@ struct TutorialView: View {
                         TutorialBullet(text: "You can add shots incrementally")
                         TutorialBullet(text: "The app tracks club distances automatically")
                         TutorialBullet(text: "Review your stats in the Charts tab")
+                        TutorialBullet(text: "Enable iCloud sync to share data between devices")
                     }
                     
                     Spacer()

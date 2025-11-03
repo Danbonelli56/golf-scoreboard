@@ -30,6 +30,10 @@ final class GolfCourse {
         self.teeSets = []
         self.createdAt = Date()
     }
+    
+    var holesArray: [Hole] {
+        holes ?? []
+    }
 }
 
 @Model

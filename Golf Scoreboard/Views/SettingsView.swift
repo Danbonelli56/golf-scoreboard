@@ -1,0 +1,288 @@
+//
+//  SettingsView.swift
+//  Golf Scoreboard
+//
+//  Created by Daniel Bonelli on 10/29/25.
+//
+
+import SwiftUI
+import SwiftData
+
+struct SettingsView: View {
+    @Environment(\.modelContext) private var modelContext
+    @Query private var courses: [GolfCourse]
+    @Query private var players: [Player]
+    
+    @State private var showingAddCourse = false
+    @State private var showingAddPlayer = false
+    @State private var editingCourse: GolfCourse?
+    @State private var editingPlayer: Player?
+    
+    var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+    }
+    
+    var appBuild: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+    }
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    NavigationLink(destination: TutorialView()) {
+                        Label("Tutorial", systemImage: "book.fill")
+                            .foregroundColor(.blue)
+                    }
+                } header: {
+                    Text("Help")
+                }
+                
+                Section {
+                    // Courses
+                    ForEach(courses) { course in
+                        NavigationLink(destination: SettingsCourseDetailView(course: course, onEdit: { editingCourse = course }, onDelete: { deleteCourse(course) })) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(course.name)
+                                    .font(.body)
+                                    .fontWeight(.semibold)
+                                
+                                Text("\(course.holesArray.count) holes")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .onDelete(perform: deleteCourses)
+                    
+                    Button(action: { showingAddCourse = true }) {
+                        Label("Add Course", systemImage: "plus.circle.fill")
+                            .foregroundColor(.green)
+                    }
+                } header: {
+                    Text("Courses")
+                }
+                
+                Section {
+                    // Players
+                    ForEach(players) { player in
+                        NavigationLink(destination: PlayerDetailView(player: player, onEdit: { editingPlayer = player }, onDelete: { deletePlayer(player) })) {
+                            HStack {
+                                Circle()
+                                    .fill(player.isCurrentUser ? Color.green : Color.blue)
+                                    .frame(width: 30, height: 30)
+                                    .overlay(
+                                        Text(player.name.prefix(1))
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(.white)
+                                    )
+                                
+                                Text(player.name)
+                                    .font(.body)
+                                
+                                if player.isCurrentUser {
+                                    Text("(You)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                if player.handicap > 0 {
+                                    Text("HCP: \(String(format: "%.1f", player.handicap))")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .onDelete(perform: deletePlayers)
+                    
+                    Button(action: { showingAddPlayer = true }) {
+                        Label("Add Player", systemImage: "plus.circle.fill")
+                            .foregroundColor(.blue)
+                    }
+                } header: {
+                    Text("Players")
+                }
+                
+                Section {
+                    HStack {
+                        Text("Version")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(appVersion)")
+                            .fontWeight(.medium)
+                    }
+                    
+                    HStack {
+                        Text("Build")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(appBuild)")
+                            .fontWeight(.medium)
+                    }
+                } header: {
+                    Text("App Information")
+                }
+            }
+            .navigationTitle("Settings")
+        }
+        .sheet(isPresented: $showingAddCourse) {
+            AddCourseView()
+        }
+        .sheet(item: $editingCourse) { course in
+            // For now, just show the full course view
+            CoursesView()
+        }
+        .sheet(isPresented: $showingAddPlayer) {
+            AddPlayerView()
+        }
+        .sheet(item: $editingPlayer) { player in
+            EditPlayerView(player: player)
+        }
+    }
+    
+    private func deleteCourses(offsets: IndexSet) {
+        for index in offsets {
+            modelContext.delete(courses[index])
+        }
+    }
+    
+    private func deletePlayers(offsets: IndexSet) {
+        for index in offsets {
+            modelContext.delete(players[index])
+        }
+    }
+    
+    private func deleteCourse(_ course: GolfCourse) {
+        modelContext.delete(course)
+    }
+    
+    private func deletePlayer(_ player: Player) {
+        modelContext.delete(player)
+    }
+}
+
+struct SettingsCourseDetailView: View {
+    let course: GolfCourse
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    
+    var body: some View {
+        Form {
+            Section {
+                Text(course.name)
+                    .font(.title2)
+                    .fontWeight(.bold)
+            } header: {
+                Text("Course Name")
+            }
+            
+            if let holes = course.holes, !holes.isEmpty {
+                Section {
+                    ForEach(holes.sorted(by: { $0.holeNumber < $1.holeNumber })) { hole in
+                        HStack {
+                            Text("Hole \(hole.holeNumber)")
+                                .fontWeight(.semibold)
+                            
+                            Spacer()
+                            
+                            Text("Par \(hole.par)")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Holes")
+                }
+            }
+        }
+        .navigationTitle("Course Details")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(action: onEdit) {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+    }
+}
+
+struct PlayerDetailView: View {
+    let player: Player
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    
+    var body: some View {
+        Form {
+            Section {
+                HStack {
+                    Circle()
+                        .fill(player.isCurrentUser ? Color.green : Color.blue)
+                        .frame(width: 60, height: 60)
+                        .overlay(
+                            Text(player.name.prefix(1))
+                                .font(.system(size: 24, weight: .semibold))
+                                .foregroundColor(.white)
+                        )
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(player.name)
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        if player.isCurrentUser {
+                            Text("Current User")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        }
+                    }
+                }
+            } header: {
+                Text("Player")
+            }
+            
+            if player.handicap > 0 {
+                Section {
+                    Text(String(format: "%.1f", player.handicap))
+                        .font(.title)
+                        .fontWeight(.bold)
+                } header: {
+                    Text("Handicap")
+                }
+            }
+        }
+        .navigationTitle("Player Details")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button(action: onEdit) {
+                        Label("Edit", systemImage: "pencil")
+                    }
+                    
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+    }
+}
+
+#Preview {
+    SettingsView()
+        .modelContainer(for: [GolfCourse.self, Player.self], inMemory: true)
+}
+
