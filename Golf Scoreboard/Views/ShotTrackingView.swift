@@ -945,13 +945,13 @@ struct ShotRow: View {
                             .italic()
                     }
                 } else if let originalFeet = shot.originalDistanceFeet {
-                    Text("to hole \(originalFeet)ft")
+                    Text("\(originalFeet)ft")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .italic()
                 } else if let remaining = shot.distanceToHole {
                     let feet = remaining * 3
-                    Text("to hole \(feet)ft")
+                    Text("\(feet)ft")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .italic()

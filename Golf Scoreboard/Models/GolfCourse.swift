@@ -17,7 +17,7 @@ final class GolfCourse {
     var rating: Double = 72.0
     @Relationship(deleteRule: .cascade, inverse: \Hole.course) var holes: [Hole]?
     @Relationship(deleteRule: .cascade, inverse: \TeeSet.course) var teeSets: [TeeSet]?
-    @Relationship(deleteRule: .nullify, inverse: \Game.course) var games: [Game]?
+    var games: [Game]?
     var createdAt: Date = Date()
     
     init(name: String, location: String? = nil, slope: Int = 113, rating: Double = 72.0) {
