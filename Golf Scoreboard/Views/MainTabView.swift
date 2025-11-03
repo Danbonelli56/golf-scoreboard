@@ -33,16 +33,6 @@ struct MainTabView: View {
                     Label("History", systemImage: "clock")
                 }
             
-            CoursesView()
-                .tabItem {
-                    Label("Courses", systemImage: "map")
-                }
-            
-            PlayersView()
-                .tabItem {
-                    Label("Players", systemImage: "person.3")
-                }
-            
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
