@@ -33,48 +33,60 @@ struct PlayerChartsSection: View {
     var body: some View {
         let playerShots = shots.filter { $0.player?.id == player.id }
         let playerGames = games.filter { $0.playersArray.contains(where: { $0.id == player.id }) }
+        let sortedGames = playerGames.sorted(by: { $0.date > $1.date })
         let stats = ShotStatistics.calculateStatistics(for: player, shots: shots)
         
-        // Club distance comparison chart (for non-putters)
-        if let clubStats = stats.filter({ !$0.value.isPutter && !$0.value.distances.isEmpty }) as? [String: ClubStatistics], !clubStats.isEmpty {
-            ClubDistanceChart(clubStats: clubStats)
+        // Show trend chart for each club with enough data
+        let clubStats = stats.filter({ !$0.value.isPutter && !$0.value.distances.isEmpty })
+        ForEach(Array(clubStats.keys.sorted { club1, club2 in
+            if club1 == "Driver" { return true }
+            if club2 == "Driver" { return false }
+            return club1 < club2
+        }), id: \.self) { club in
+            ClubTrendChart(player: player, club: club, games: sortedGames)
         }
         
         // Putter stats per game chart
         let putterShots = playerShots.filter({ $0.isPutt && $0.club?.lowercased() == "putter" })
         if !putterShots.isEmpty && !playerGames.isEmpty {
-            PutterTrendChart(player: player, games: playerGames.sorted(by: { $0.date > $1.date }))
+            PutterTrendChart(player: player, games: sortedGames)
         }
     }
 }
 
-struct ClubDistanceChart: View {
-    let clubStats: [String: ClubStatistics]
+struct ClubTrendChart: View {
+    let player: Player
+    let club: String
+    let games: [Game]
+    @Query private var shots: [Shot]
     
     var body: some View {
+        let gameData = calculateClubDistancePerGame()
+        
         VStack(alignment: .leading, spacing: 8) {
-            Text("Distance by Club")
+            Text("\(club) Distance Trend")
                 .font(.subheadline)
                 .fontWeight(.semibold)
             
-            Chart {
-                ForEach(Array(clubStats.keys.sorted { club1, club2 in
-                    if club1 == "Driver" { return true }
-                    if club2 == "Driver" { return false }
-                    return club1 < club2
-                }), id: \.self) { club in
-                    if let clubData = clubStats[club] {
-                        BarMark(
-                            x: .value("Club", club),
-                            y: .value("Distance", clubData.averageDistance)
-                        )
-                        .foregroundStyle(.blue.gradient)
+            Chart(gameData, id: \.gameName) { data in
+                LineMark(
+                    x: .value("Game", data.gameName),
+                    y: .value("Distance", data.averageDistance)
+                )
+                .foregroundStyle(.blue.gradient)
+                .interpolationMethod(.catmullRom)
+                .symbol(.circle)
+                
+                // Add overall average line
+                if let firstData = gameData.first {
+                    RuleMark(y: .value("Average", firstData.overallAverage))
+                        .foregroundStyle(.orange)
+                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [5, 5]))
                         .annotation {
-                            Text("\(Int(clubData.averageDistance))")
+                            Text("Avg: \(Int(firstData.overallAverage))")
                                 .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.orange)
                         }
-                    }
                 }
             }
             .frame(height: 200)
@@ -92,11 +104,44 @@ struct ClubDistanceChart: View {
                 }
             }
             
-            Text("Average distance in yards")
+            Text("Average distance in yards per game")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
         .padding(.vertical, 8)
+    }
+    
+    private func calculateClubDistancePerGame() -> [ClubGameData] {
+        var dataPoints: [ClubGameData] = []
+        
+        // Calculate overall average
+        let allClubShots = shots.filter { $0.player?.id == player.id && $0.club?.lowercased() == club.lowercased() && !$0.isPutt }
+        let overallAverage = calculateAverageDistance(from: allClubShots)
+        
+        for game in games {
+            let gameShots = shots.filter { 
+                guard let shotGameID = $0.game?.id else { return false }
+                return shotGameID == game.id && $0.player?.id == player.id && $0.club?.lowercased() == club.lowercased() && !$0.isPutt
+            }
+            
+            let avgDistance = calculateAverageDistance(from: gameShots)
+            
+            if avgDistance > 0 {
+                dataPoints.append(ClubGameData(
+                    gameName: game.course?.name ?? "Game",
+                    averageDistance: avgDistance,
+                    overallAverage: overallAverage
+                ))
+            }
+        }
+        
+        return dataPoints
+    }
+    
+    private func calculateAverageDistance(from shots: [Shot]) -> Double {
+        let distances = shots.compactMap { $0.distanceTraveled }.filter { $0 > 0 }
+        guard !distances.isEmpty else { return 0.0 }
+        return Double(distances.reduce(0, +)) / Double(distances.count)
     }
 }
 
@@ -200,6 +245,12 @@ struct PutterTrendChart: View {
 struct GamePuttData {
     let gameName: String
     let puttsPerHole: Double
+    let overallAverage: Double
+}
+
+struct ClubGameData {
+    let gameName: String
+    let averageDistance: Double
     let overallAverage: Double
 }
 
