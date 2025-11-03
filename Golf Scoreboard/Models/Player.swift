@@ -16,9 +16,9 @@ final class Player {
     var isCurrentUser: Bool = false
     var preferredTeeColor: String? // e.g., "White"
     var createdAt: Date = Date()
-    @Relationship(deleteRule: .nullify, inverse: \Game.players) var games: [Game]?
-    @Relationship(deleteRule: .nullify, inverse: \Shot.player) var shots: [Shot]?
-    @Relationship(deleteRule: .nullify, inverse: \PlayerScore.player) var playerScores: [PlayerScore]?
+    var games: [Game]?
+    var shots: [Shot]?
+    var playerScores: [PlayerScore]?
     
     init(name: String, handicap: Double = 0.0, isCurrentUser: Bool = false, preferredTeeColor: String? = "White") {
         self.id = UUID()
