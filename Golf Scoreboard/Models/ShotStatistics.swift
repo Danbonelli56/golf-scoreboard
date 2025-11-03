@@ -16,8 +16,19 @@ struct ClubStatistics {
     var distances: [Int]
     var shotsByResult: [String: Int]
     
+    // Putter-specific stats
+    var isPutter: Bool = false
+    var totalPutts: Int = 0
+    var uniqueHoles: Set<Int> = []
+    var feetDistances: [Int] = [] // Feet for putts
+    var averageFeet: Double = 0.0
+    
     var totalShots: Int {
         shotsByResult.values.reduce(0, +)
+    }
+    
+    var puttsPerHole: Double {
+        uniqueHoles.isEmpty ? 0.0 : Double(totalPutts) / Double(uniqueHoles.count)
     }
     
     init(club: String) {
@@ -27,6 +38,8 @@ struct ClubStatistics {
         self.maxDistance = 0
         self.distances = []
         self.shotsByResult = [:]
+        self.isPutter = club.lowercased() == "putter"
+        self.feetDistances = []
     }
     
     mutating func addDistance(_ distance: Int) {
@@ -37,6 +50,18 @@ struct ClubStatistics {
             averageDistance = Double(distances.reduce(0, +)) / Double(count)
             minDistance = distances.min() ?? 0
             maxDistance = distances.max() ?? 0
+        }
+    }
+    
+    mutating func addPutt(holeNumber: Int, feet: Int?) {
+        totalPutts += 1
+        uniqueHoles.insert(holeNumber)
+        if let feet = feet, feet > 0 {
+            feetDistances.append(feet)
+            let count = feetDistances.count
+            if count > 0 {
+                averageFeet = Double(feetDistances.reduce(0, +)) / Double(count)
+            }
         }
     }
     
@@ -67,9 +92,14 @@ class ShotStatistics {
                 stats[club] = ClubStatistics(club: club)
             }
             
-            // Add distance if available
-            if let distance = shot.distanceTraveled, distance > 0 {
-                stats[club]?.addDistance(distance)
+            // Handle putts differently
+            if shot.isPutt && shot.club?.lowercased() == "putter" {
+                stats[club]?.addPutt(holeNumber: shot.holeNumber, feet: shot.originalDistanceFeet)
+            } else {
+                // Add distance if available for non-putts
+                if let distance = shot.distanceTraveled, distance > 0 {
+                    stats[club]?.addDistance(distance)
+                }
             }
             
             // Always track shot result (including putts)

@@ -75,29 +75,54 @@ struct ClubStatsRow: View {
             Text(stats.club)
                 .font(.headline)
             
-            // Distance stats (if available)
-            if stats.averageDistance > 0 {
-            HStack {
-                Text("Avg:")
-                Text("\(Int(stats.averageDistance)) yds")
-                    .foregroundColor(.blue)
-                    .fontWeight(.semibold)
-                
-                Text("|")
-                    .foregroundColor(.secondary)
-                
-                Text("Range:")
-                Text("\(stats.minDistance)-\(stats.maxDistance) yds")
-                    .foregroundColor(.green)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                Text("\(stats.totalShots) shots")
-                    .foregroundColor(.secondary)
-                    .font(.caption)
-            }
-            .font(.caption)
+            // Special display for Putter
+            if stats.isPutter {
+                HStack {
+                    if stats.averageFeet > 0 {
+                        Text("Avg:")
+                        Text(String(format: "%.1f ft", stats.averageFeet))
+                            .foregroundColor(.blue)
+                            .fontWeight(.semibold)
+                        
+                        Text("|")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Text("Per Hole:")
+                    Text(String(format: "%.2f putts", stats.puttsPerHole))
+                        .foregroundColor(.green)
+                        .fontWeight(.semibold)
+                    
+                    Spacer()
+                    
+                    Text("\(stats.totalPutts) putts")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+                .font(.caption)
+            } else if stats.averageDistance > 0 {
+                // Distance stats for non-putters (if available)
+                HStack {
+                    Text("Avg:")
+                    Text("\(Int(stats.averageDistance)) yds")
+                        .foregroundColor(.blue)
+                        .fontWeight(.semibold)
+                    
+                    Text("|")
+                        .foregroundColor(.secondary)
+                    
+                    Text("Range:")
+                    Text("\(stats.minDistance)-\(stats.maxDistance) yds")
+                        .foregroundColor(.green)
+                        .fontWeight(.semibold)
+                    
+                    Spacer()
+                    
+                    Text("\(stats.totalShots) shots")
+                        .foregroundColor(.secondary)
+                        .font(.caption)
+                }
+                .font(.caption)
             } else {
                 // Show total shots count even when no distance data
                 HStack {
@@ -109,8 +134,8 @@ struct ClubStatsRow: View {
                 }
             }
             
-            // Shot direction breakdown
-            if !stats.shotsByResult.isEmpty {
+            // Shot direction breakdown (for non-putters only)
+            if !stats.isPutter && !stats.shotsByResult.isEmpty {
                 HStack(spacing: 12) {
                     if straightCount > 0 {
                         Label("\(straightCount)", systemImage: "arrow.up")
