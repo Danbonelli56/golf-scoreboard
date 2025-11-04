@@ -21,13 +21,25 @@ struct GameScorecardView: View {
         ScrollView {
             VStack(spacing: 0) {
                 // Header
-                HStack {
-                    Text(game.course?.name ?? "Unknown Course")
-                        .font(.headline)
-                    Spacer()
-                    Text(game.date, format: .dateTime)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(game.course?.name ?? "Unknown Course")
+                            .font(.headline)
+                        Spacer()
+                        Text(game.date, format: .dateTime)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    // Tee color display
+                    if let teeColor = game.selectedTeeColor {
+                        HStack {
+                            Text("Tees: \(teeColor)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                    }
                 }
                 .padding()
                 .background(Color(.secondarySystemBackground))
