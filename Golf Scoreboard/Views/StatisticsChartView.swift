@@ -15,11 +15,20 @@ struct StatisticsChartView: View {
     @Query private var games: [Game]
     @AppStorage("selectedGameID") private var selectedGameIDString: String = ""
     
+    // Filter shots to only include those from existing (non-deleted) games
+    private var validShots: [Shot] {
+        let validGameIDs = Set(games.map { $0.id })
+        return shots.filter { shot in
+            guard let gameID = shot.game?.id else { return false }
+            return validGameIDs.contains(gameID)
+        }
+    }
+    
     var body: some View {
         List {
             ForEach(players) { player in
                 Section(header: Text(player.name).font(.headline)) {
-                    PlayerChartsSection(player: player, selectedGameIDString: selectedGameIDString)
+                    PlayerChartsSection(player: player, selectedGameIDString: selectedGameIDString, validShots: validShots)
                 }
             }
         }
@@ -29,15 +38,15 @@ struct StatisticsChartView: View {
 struct PlayerChartsSection: View {
     let player: Player
     let selectedGameIDString: String
-    @Query private var shots: [Shot]
+    let validShots: [Shot] // Use filtered shots from parent
     @Query private var games: [Game]
     @State private var showCurrentRoundOnly = false
     
     var body: some View {
-        let playerShots = shots.filter { $0.player?.id == player.id }
+        let playerShots = validShots.filter { $0.player?.id == player.id }
         let playerGames = games.filter { $0.playersArray.contains(where: { $0.id == player.id }) }
         let sortedGames = playerGames.sorted(by: { $0.date > $1.date })
-        let stats = ShotStatistics.calculateStatistics(for: player, shots: shots)
+        let stats = ShotStatistics.calculateStatistics(for: player, shots: validShots)
         
         // Toggle between all games and current round
         Picker("View", selection: $showCurrentRoundOnly) {
@@ -62,13 +71,13 @@ struct PlayerChartsSection: View {
             if club2 == "Driver" { return false }
             return club1 < club2
         }), id: \.self) { club in
-            ClubTrendChart(player: player, club: club, games: gamesToShow, showPerHole: showCurrentRoundOnly)
+            ClubTrendChart(player: player, club: club, games: gamesToShow, showPerHole: showCurrentRoundOnly, shots: validShots)
         }
         
         // Putter stats per game chart
         let putterShots = playerShots.filter({ $0.isPutt && $0.club?.lowercased() == "putter" })
         if !putterShots.isEmpty && !playerGames.isEmpty {
-            PutterTrendChart(player: player, games: gamesToShow, showPerHole: showCurrentRoundOnly)
+            PutterTrendChart(player: player, games: gamesToShow, showPerHole: showCurrentRoundOnly, shots: validShots)
         }
     }
 }
@@ -78,7 +87,7 @@ struct ClubTrendChart: View {
     let club: String
     let games: [Game]
     let showPerHole: Bool
-    @Query private var shots: [Shot]
+    let shots: [Shot] // Use filtered shots from parent
     
     var body: some View {
         let gameData = showPerHole ? calculateClubDistancePerHole() : calculateClubDistancePerGame()
@@ -208,7 +217,7 @@ struct PutterTrendChart: View {
     let player: Player
     let games: [Game]
     let showPerHole: Bool
-    @Query private var shots: [Shot]
+    let shots: [Shot] // Use filtered shots from parent
     
     var body: some View {
         let gamePuttsData = showPerHole ? calculatePuttStatsPerHole() : calculatePuttStatsPerGame()

@@ -11,7 +11,17 @@ import SwiftData
 struct ShotStatisticsView: View {
     @Query private var players: [Player]
     @Query private var shots: [Shot]
+    @Query private var games: [Game] // Query games to filter shots
     @State private var selectedTab = 0
+    
+    // Filter shots to only include those from existing (non-deleted) games
+    private var validShots: [Shot] {
+        let validGameIDs = Set(games.map { $0.id })
+        return shots.filter { shot in
+            guard let gameID = shot.game?.id else { return false }
+            return validGameIDs.contains(gameID)
+        }
+    }
     
     var body: some View {
         NavigationStack {
@@ -20,8 +30,8 @@ struct ShotStatisticsView: View {
                 List {
                     ForEach(players) { player in
                         Section(header: Text(player.name).font(.headline)) {
-                            let stats = ShotStatistics.calculateStatistics(for: player, shots: shots)
-                            let overall = ShotStatistics.getOverallStats(for: player, shots: shots)
+                            let stats = ShotStatistics.calculateStatistics(for: player, shots: validShots)
+                            let overall = ShotStatistics.getOverallStats(for: player, shots: validShots)
                             
                             // Overall stats
                             HStack {
