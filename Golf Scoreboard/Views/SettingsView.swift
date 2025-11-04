@@ -328,13 +328,38 @@ struct PlayerDetailView: View {
                 Text("Player")
             }
             
-            if player.handicap > 0 {
+            Section {
+                Text(String(format: "%.1f", player.handicap))
+                    .font(.title)
+                    .fontWeight(.bold)
+            } header: {
+                Text("Handicap")
+            }
+            
+            // Contact Information
+            if player.email != nil || player.phoneNumber != nil {
                 Section {
-                    Text(String(format: "%.1f", player.handicap))
-                        .font(.title)
-                        .fontWeight(.bold)
+                    if let email = player.email, !email.isEmpty {
+                        HStack {
+                            Image(systemName: "envelope")
+                                .foregroundColor(.blue)
+                                .frame(width: 24)
+                            Text(email)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    
+                    if let phone = player.phoneNumber, !phone.isEmpty {
+                        HStack {
+                            Image(systemName: "phone")
+                                .foregroundColor(.green)
+                                .frame(width: 24)
+                            Text(phone)
+                                .textSelection(.enabled)
+                        }
+                    }
                 } header: {
-                    Text("Handicap")
+                    Text("Contact Information")
                 }
             }
         }
