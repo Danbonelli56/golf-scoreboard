@@ -178,6 +178,17 @@ struct SettingsCourseDetailView: View {
         (course.holes ?? []).sorted(by: { $0.holeNumber < $1.holeNumber })
     }
     
+    private func totalYardage(for teeColor: String) -> Int {
+        let allHoles = course.holes ?? []
+        var total = 0
+        for hole in allHoles {
+            if let teeDistance = (hole.teeDistances ?? []).first(where: { $0.teeColor == teeColor }) {
+                total += teeDistance.distanceYards
+            }
+        }
+        return total
+    }
+    
     var body: some View {
         Form {
             Section {
@@ -197,6 +208,8 @@ struct SettingsCourseDetailView: View {
                                 .fontWeight(.semibold)
                             Spacer()
                             VStack(alignment: .trailing, spacing: 4) {
+                                Text("Total: \(totalYardage(for: teeSet.teeColor)) yds")
+                                    .fontWeight(.medium)
                                 Text("Rating: \(String(format: "%.1f", teeSet.rating))")
                                 Text("Slope: \(Int(teeSet.slope))")
                             }
