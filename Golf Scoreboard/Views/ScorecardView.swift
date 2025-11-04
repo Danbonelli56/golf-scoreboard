@@ -31,7 +31,7 @@ struct ScorecardView: View {
     }
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             VStack(spacing: 0) {
                 // Main content area
                 if let game = selectedGame {
