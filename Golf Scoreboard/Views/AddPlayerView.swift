@@ -21,6 +21,7 @@ struct AddPlayerView: View {
     @State private var phoneNumber = ""
     @State private var showingContactPicker = false
     @State private var selectedContact: CNContact?
+    @State private var showingPermissionAlert = false
     
     private var handicap: Double {
         Double(handicapText) ?? 0.0
@@ -35,7 +36,7 @@ struct AddPlayerView: View {
                             .textInputAutocapitalization(.words)
                         
                         Button(action: {
-                            showingContactPicker = true
+                            requestContactsPermissionAndShowPicker()
                         }) {
                             Image(systemName: "person.crop.circle.badge.plus")
                                 .font(.title2)
@@ -82,8 +83,32 @@ struct AddPlayerView: View {
             }
             .sheet(isPresented: $showingContactPicker) {
                 ContactPickerView { contact in
-                    selectedContact = contact
                     loadContactInfo(contact)
+                    // Close the contact picker sheet, but keep the AddPlayerView open
+                    showingContactPicker = false
+                }
+            }
+            .alert("Contacts Permission Required", isPresented: $showingPermissionAlert) {
+                Button("Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Please enable Contacts access in Settings to import player information.")
+            }
+        }
+    }
+    
+    private func requestContactsPermissionAndShowPicker() {
+        let store = CNContactStore()
+        store.requestAccess(for: .contacts) { granted, error in
+            DispatchQueue.main.async {
+                if granted {
+                    showingContactPicker = true
+                } else {
+                    showingPermissionAlert = true
                 }
             }
         }
@@ -124,9 +149,16 @@ struct AddPlayerView: View {
             phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
         )
         modelContext.insert(player)
-        try? modelContext.save()
         
-        dismiss()
+        // Save with proper error handling
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            print("Error saving player: \(error)")
+            // Still dismiss to avoid hanging - the player might still be created
+            dismiss()
+        }
     }
 }
 
@@ -135,32 +167,47 @@ struct ContactPickerView: UIViewControllerRepresentable {
     let onSelectContact: (CNContact) -> Void
     @Environment(\.dismiss) private var dismiss
     
-    func makeUIViewController(context: Context) -> CNContactPickerViewController {
+    func makeUIViewController(context: Context) -> ContactPickerViewControllerWrapper {
+        let wrapper = ContactPickerViewControllerWrapper()
+        wrapper.onSelectContact = { contact in
+            onSelectContact(contact)
+        }
+        wrapper.onCancel = {
+            dismiss()
+        }
+        return wrapper
+    }
+    
+    func updateUIViewController(_ uiViewController: ContactPickerViewControllerWrapper, context: Context) {}
+}
+
+class ContactPickerViewControllerWrapper: UIViewController {
+    var onSelectContact: ((CNContact) -> Void)?
+    var onCancel: (() -> Void)?
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
         let picker = CNContactPickerViewController()
-        picker.delegate = context.coordinator
-        return picker
+        picker.delegate = self
+        
+        // Present the picker modally
+        present(picker, animated: true)
+    }
+}
+
+extension ContactPickerViewControllerWrapper: CNContactPickerDelegate {
+    func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
+        DispatchQueue.main.async {
+            // Call the selection handler - the picker will auto-dismiss
+            self.onSelectContact?(contact)
+        }
     }
     
-    func updateUIViewController(_ uiViewController: CNContactPickerViewController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
-    class Coordinator: NSObject, CNContactPickerDelegate {
-        let parent: ContactPickerView
-        
-        init(_ parent: ContactPickerView) {
-            self.parent = parent
-        }
-        
-        func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
-            parent.onSelectContact(contact)
-            parent.dismiss()
-        }
-        
-        func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
-            parent.dismiss()
+    func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
+        DispatchQueue.main.async {
+            // Only dismiss the parent sheet if cancelled
+            self.onCancel?()
         }
     }
 }
