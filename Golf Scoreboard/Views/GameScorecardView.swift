@@ -55,17 +55,17 @@ struct GameScorecardView: View {
                     // Header row with Par/HCP and player names
                     HStack(spacing: 0) {
                         Text("Hole")
-                        .frame(width: 40)
+                        .frame(width: 60)
                         .font(.caption)
                         .fontWeight(.semibold)
                         
                         Text("Par")
-                        .frame(width: 35)
+                        .frame(width: 50)
                         .font(.caption)
                         .fontWeight(.semibold)
                         
                         Text("HCP")
-                        .frame(width: 30)
+                        .frame(width: 50)
                         .font(.caption)
                         .fontWeight(.semibold)
                         
@@ -108,19 +108,19 @@ struct HoleScoreRow: View {
         HStack(spacing: 0) {
             // Hole number
             Text("\(holeNumber)")
-                .frame(width: 40)
+                .frame(width: 60)
                 .font(.caption)
                 .fontWeight(.medium)
             
             // Par
             Text(parText)
-                .frame(width: 35)
+                .frame(width: 50)
                 .font(.caption)
                 .foregroundColor(.secondary)
             
             // Handicap
             Text(hcpText)
-                .frame(width: 30)
+                .frame(width: 50)
                 .font(.caption)
                 .foregroundColor(.secondary)
             
@@ -177,16 +177,16 @@ struct TotalScoreRow: View {
     var body: some View {
         HStack(spacing: 0) {
             Text(label)
-                .frame(width: 40)
+                .frame(width: 60)
                 .font(.caption)
                 .fontWeight(.semibold)
             
             // Empty cells for Par and HCP columns
             Text("")
-                .frame(width: 35)
+                .frame(width: 50)
             
             Text("")
-                .frame(width: 30)
+                .frame(width: 50)
             
             ForEach(scores, id: \.player.id) { score in
                 VStack(spacing: 2) {
