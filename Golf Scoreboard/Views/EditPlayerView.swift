@@ -14,14 +14,18 @@ struct EditPlayerView: View {
     @Bindable var player: Player
     
     @State private var playerName: String
-    @State private var handicap: Double
+    @State private var handicapText: String
     @State private var isCurrentUser: Bool
     @State private var preferredTeeColor: String
+    
+    private var handicap: Double {
+        Double(handicapText) ?? 0.0
+    }
     
     init(player: Player) {
         self.player = player
         _playerName = State(initialValue: player.name)
-        _handicap = State(initialValue: player.handicap)
+        _handicapText = State(initialValue: String(format: "%.1f", player.handicap))
         _isCurrentUser = State(initialValue: player.isCurrentUser)
         _preferredTeeColor = State(initialValue: player.preferredTeeColor ?? "White")
     }
@@ -33,7 +37,8 @@ struct EditPlayerView: View {
                     TextField("Name", text: $playerName)
                         .textInputAutocapitalization(.words)
                     
-                    Stepper("Handicap: \(String(format: "%.1f", handicap))", value: $handicap, in: 0...36, step: 0.1)
+                    TextField("Handicap", text: $handicapText)
+                        .keyboardType(.decimalPad)
                     
                     Toggle("Current User", isOn: $isCurrentUser)
                     

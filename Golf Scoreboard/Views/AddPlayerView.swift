@@ -13,8 +13,12 @@ struct AddPlayerView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var playerName = ""
-    @State private var handicap = 0.0
+    @State private var handicapText = "0.0"
     @State private var isCurrentUser = false
+    
+    private var handicap: Double {
+        Double(handicapText) ?? 0.0
+    }
     
     var body: some View {
         NavigationView {
@@ -23,7 +27,8 @@ struct AddPlayerView: View {
                     TextField("Name", text: $playerName)
                         .textInputAutocapitalization(.words)
                     
-                    Stepper("Handicap: \(String(format: "%.1f", handicap))", value: $handicap, in: 0...36, step: 0.1)
+                    TextField("Handicap", text: $handicapText)
+                        .keyboardType(.decimalPad)
                     
                     Toggle("Current User", isOn: $isCurrentUser)
                 }
