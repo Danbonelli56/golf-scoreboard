@@ -21,6 +21,23 @@ struct GameSetupView: View {
     
     @State private var selectedCourse: GolfCourse?
     @State private var selectedPlayers: Set<UUID> = []
+    @State private var selectedTeeColor: String? = nil
+    
+    private var availableTeeColors: [String] {
+        guard let course = selectedCourse else { return [] }
+        let teeColors = Set((course.holes ?? []).flatMap { ($0.teeDistances ?? []).map { $0.teeColor } })
+        return teeColors.sorted()
+    }
+    
+    private var defaultTeeColor: String? {
+        // Find current user's preferred tee, or first available tee
+        if let currentUser = players.first(where: { $0.isCurrentUser }),
+           let preferredTee = currentUser.preferredTeeColor,
+           availableTeeColors.contains(preferredTee) {
+            return preferredTee
+        }
+        return availableTeeColors.first
+    }
     
     var body: some View {
         NavigationView {
@@ -36,10 +53,32 @@ struct GameSetupView: View {
                                 Text(course.name).tag(course as GolfCourse?)
                             }
                         }
+                        .onChange(of: selectedCourse) { _, _ in
+                            // Reset tee selection when course changes
+                            selectedTeeColor = defaultTeeColor
+                        }
                     }
                     
                     NavigationLink("Add Course") {
                         AddCourseView()
+                    }
+                }
+                
+                // Tee selection section (only show when course is selected and has tees)
+                if let course = selectedCourse, !availableTeeColors.isEmpty {
+                    Section("Tee Selection") {
+                        Picker("Tee Color", selection: $selectedTeeColor) {
+                            Text("Default (Player Preference)").tag(nil as String?)
+                            ForEach(availableTeeColors, id: \.self) { teeColor in
+                                Text(teeColor).tag(teeColor as String?)
+                            }
+                        }
+                        
+                        if let defaultTee = defaultTeeColor {
+                            Text("Default: \(defaultTee)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
                 
@@ -74,6 +113,12 @@ struct GameSetupView: View {
                     }
                 }
             }
+            .onAppear {
+                // Initialize tee selection if course is already selected
+                if selectedCourse != nil && selectedTeeColor == nil && !availableTeeColors.isEmpty {
+                    selectedTeeColor = defaultTeeColor
+                }
+            }
             .navigationTitle("New Game")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -95,7 +140,17 @@ struct GameSetupView: View {
     
     private func startGame() {
         let selectedPlayersArray = players.filter { selectedPlayers.contains($0.id) }
-        let newGame = Game(course: selectedCourse, players: selectedPlayersArray)
+        
+        // Use selected tee color, or default to player's preferred tee, or nil if none specified
+        let teeColorToUse: String? = {
+            if let selectedTee = selectedTeeColor {
+                return selectedTee
+            }
+            // If no override selected, use default (player preference)
+            return defaultTeeColor
+        }()
+        
+        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse)
         
         // Only one game can be active at a time
         modelContext.insert(newGame)

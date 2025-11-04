@@ -17,14 +17,16 @@ final class Game {
     var shots: [Shot]?
     var date: Date = Date()
     var createdAt: Date?
+    var selectedTeeColor: String? // Override tee color for this game
     
-    init(course: GolfCourse? = nil, players: [Player] = []) {
+    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil) {
         self.id = UUID()
         self.course = course
         self.date = Date()
         self.players = players
         self.holesScores = []
         self.createdAt = nil
+        self.selectedTeeColor = selectedTeeColor
     }
     
     // Computed properties for safe access to optional arrays
