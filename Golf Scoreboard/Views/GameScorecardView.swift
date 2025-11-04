@@ -124,16 +124,31 @@ struct HoleScoreRow: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
             
-            // Player scores
+            // Player scores (gross and net)
             ForEach(game.playersArray) { player in
-                let score = getScore(for: player)
-                Text(score.map { "\($0)" } ?? "-")
-                    .frame(maxWidth: .infinity)
-                    .font(.caption)
-                    .foregroundColor(scoreColor(for: score))
-                    .onTapGesture {
-                        showingScoreEditor = true
+                let gross = getScore(for: player)
+                let net = gross != nil ? game.netScoreForHole(player: player, holeNumber: holeNumber) : nil
+                
+                VStack(spacing: 2) {
+                    if let grossScore = gross {
+                        Text("\(grossScore)")
+                            .font(.caption)
+                            .foregroundColor(scoreColor(for: grossScore))
+                        if let netScore = net {
+                            Text("(\(netScore))")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        Text("-")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
+                }
+                .frame(maxWidth: .infinity)
+                .onTapGesture {
+                    showingScoreEditor = true
+                }
             }
         }
         .padding(.vertical, 4)

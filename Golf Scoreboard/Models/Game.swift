@@ -80,21 +80,92 @@ final class Game {
         return calculateScores(holesScores: holesScoresArray, useHalfHandicap: false)
     }
     
-    private func calculateScores(holesScores: [HoleScore], useHalfHandicap: Bool = false) -> [(player: Player, gross: Int, net: Int)] {
-        var playerTotals: [UUID: Int] = [:]
+    // Calculate how many strokes a player gets on a specific hole based on their handicap
+    // Examples:
+    // - Handicap 13: 1 stroke on holes with HCP 1-13
+    // - Handicap 20: 1 stroke on all holes (HCP 1-18), plus 1 extra stroke on holes with HCP 1-2
+    private func strokesForHole(player: Player, holeHandicap: Int, useHalfHandicap: Bool = false) -> Int {
+        let handicap = useHalfHandicap ? player.handicap / 2.0 : player.handicap
+        let handicapInt = Int(round(handicap))
         
+        // Base strokes: 1 stroke per 18 holes of handicap
+        // Handicap 20: baseStrokes = 1 (means 1 stroke on all 18 holes)
+        // Handicap 13: baseStrokes = 0
+        let baseStrokes = handicapInt / 18
+        
+        // Remainder: additional strokes beyond full 18-hole increments
+        // Handicap 20: remainder = 2 (extra strokes on 2 hardest holes)
+        // Handicap 13: remainder = 13 (strokes on 13 hardest holes)
+        let remainder = handicapInt % 18
+        
+        // If there's a remainder, holes with HCP <= remainder get an extra stroke
+        if remainder > 0 && holeHandicap <= remainder {
+            return baseStrokes + 1
+        }
+        
+        // For handicap <= 18 with no base strokes, only holes with HCP <= handicap get strokes
+        // This case is already covered above, but keep for clarity
+        if baseStrokes == 0 && holeHandicap <= handicapInt {
+            return 1
+        }
+        
+        // Return base strokes (for handicap > 18, holes beyond remainder get base strokes only)
+        return baseStrokes
+    }
+    
+    // Calculate net score for a specific hole
+    func netScoreForHole(player: Player, holeNumber: Int, useHalfHandicap: Bool = false) -> Int? {
+        guard let course = course,
+              let holes = course.holes,
+              let hole = holes.first(where: { $0.holeNumber == holeNumber }),
+              let gross = holesScoresArray.first(where: { $0.holeNumber == holeNumber })?.scores[player.id] else {
+            return nil
+        }
+        
+        let strokes = strokesForHole(player: player, holeHandicap: hole.mensHandicap, useHalfHandicap: useHalfHandicap)
+        return max(0, gross - strokes)
+    }
+    
+    private func calculateScores(holesScores: [HoleScore], useHalfHandicap: Bool = false) -> [(player: Player, gross: Int, net: Int)] {
+        var playerGrossTotals: [UUID: Int] = [:]
+        var playerNetTotals: [UUID: Int] = [:]
+        
+        guard let course = course, let holes = course.holes else {
+            // Fallback to old calculation if no course data
+            for holeScore in holesScores {
+                for player in playersArray {
+                    if let score = holeScore.scores[player.id] {
+                        playerGrossTotals[player.id, default: 0] += score
+                    }
+                }
+            }
+            return playersArray.map { player in
+                let gross = playerGrossTotals[player.id] ?? 0
+                let effectiveHandicap = useHalfHandicap ? player.handicap / 2.0 : player.handicap
+                let net = max(0, gross - Int(round(effectiveHandicap)))
+                return (player: player, gross: gross, net: net)
+            }
+        }
+        
+        // Calculate gross and net scores per hole
         for holeScore in holesScores {
+            guard let hole = holes.first(where: { $0.holeNumber == holeScore.holeNumber }) else { continue }
+            
             for player in playersArray {
-                if let score = holeScore.scores[player.id] {
-                    playerTotals[player.id, default: 0] += score
+                if let gross = holeScore.scores[player.id] {
+                    playerGrossTotals[player.id, default: 0] += gross
+                    
+                    // Calculate net score for this hole
+                    let strokes = strokesForHole(player: player, holeHandicap: hole.mensHandicap, useHalfHandicap: useHalfHandicap)
+                    let net = max(0, gross - strokes)
+                    playerNetTotals[player.id, default: 0] += net
                 }
             }
         }
         
         return playersArray.map { player in
-            let gross = playerTotals[player.id] ?? 0
-            let effectiveHandicap = useHalfHandicap ? player.handicap / 2.0 : player.handicap
-            let net = max(0, gross - Int(round(effectiveHandicap)))
+            let gross = playerGrossTotals[player.id] ?? 0
+            let net = playerNetTotals[player.id] ?? 0
             return (player: player, gross: gross, net: net)
         }
     }
