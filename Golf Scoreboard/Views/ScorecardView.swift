@@ -90,13 +90,26 @@ struct ScorecardView: View {
         if selectedGame == nil {
             // Check if input has patterns that indicate game creation
             let hasWithKeyword = lowerText.contains(" with ")
-            let hasAtKeyword = lowerText.contains(" at ")
-            let hasAndAtPattern = lowerText.range(of: " and ") != nil && hasAtKeyword
+            let hasAtKeyword = lowerText.contains(" at ") || lowerText.contains("at")
+            let hasAndKeyword = lowerText.contains(" and ")
             
-            if hasWithKeyword || hasAtKeyword || hasAndAtPattern {
+            // Allow game creation if:
+            // 1. Has "with" keyword
+            // 2. Has "at" keyword  
+            // 3. Has "and" (multiple players) - might include course name after
+            // 4. Has a single word that could be a course name (will be validated in parsing)
+            if hasWithKeyword || hasAtKeyword || hasAndKeyword {
                 parseAndCreateGame(text: inputText)
             } else {
-                print("ℹ️ No active game. Say '[players] at [course]' to start")
+                // Check if we have at least one player and something that might be a course
+                // This handles cases like "dan osprey cove" where there's no "at"
+                let words = lowerText.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                if words.count >= 2 {
+                    // Could be "player course" - try parsing it
+                    parseAndCreateGame(text: inputText)
+                } else {
+                    print("ℹ️ No active game. Say '[players] at [course]' or '[players] [course]' to start")
+                }
             }
         } else {
             // We have an active game, parse as score input
@@ -161,20 +174,129 @@ struct ScorecardView: View {
             }
         }
         
-        // Extract course name
+        // Extract course name and tee color
         var selectedCourse: GolfCourse? = nil
-        if let atRange = lowerText.range(of: "at") {
-            let courseSection = String(lowerText[atRange.upperBound...])
-            let courseName = courseSection.trimmingCharacters(in: .whitespaces)
+        var selectedTeeColor: String? = nil
+        
+        // Common tee color patterns to remove from course name matching
+        let teeColorPatterns = ["black tees", "gold tees", "white tees", "blue tees", "green tees", "gray tees", "grey tees",
+                               "black tee", "gold tee", "white tee", "blue tee", "green tee", "gray tee", "grey tee",
+                               "black", "gold", "white", "blue", "green", "gray", "grey"]
+        
+        // Try to find course - look for "at" first, then try without "at"
+        var courseSection: String = ""
+        if let atRange = lowerText.range(of: " at ") {
+            courseSection = String(lowerText[atRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+        } else if let atRange = lowerText.range(of: "at") {
+            courseSection = String(lowerText[atRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+        } else {
+            // No "at" found - try to find course name anywhere in the text
+            // Strategy: Try matching against known course names directly
+            // First, try removing player names and "and" to see what's left
+            var remainingText = lowerText
+            for name in playerNames {
+                let nameLower = name.lowercased()
+                remainingText = remainingText.replacingOccurrences(of: nameLower, with: "", options: .caseInsensitive)
+            }
+            remainingText = remainingText.replacingOccurrences(of: " and ", with: " ", options: .caseInsensitive)
+            remainingText = remainingText.trimmingCharacters(in: .whitespaces)
             
-            print("⛳ Looking for course: '\(courseName)'")
-            
+            // If we have remaining text, use it; otherwise try to match course names directly from the full text
+            if !remainingText.isEmpty {
+                courseSection = remainingText
+            } else {
+                // No text left after removing player names - try direct course matching on full text
+                // This handles cases like "dan and dave osprey cove" where course name comes after players
+                // We'll match courses by checking if any course name appears in the full text
+                for course in courses {
+                    let courseNameLower = course.name.lowercased()
+                    let keyWords = courseNameLower.components(separatedBy: " ").filter { !["the", "at", "club", "golf"].contains($0) }
+                    var foundWords = 0
+                    for word in keyWords where word.count > 3 { // Only match significant words
+                        if lowerText.contains(word) {
+                            foundWords += 1
+                        }
+                    }
+                    if foundWords >= 1 {
+                        // Found a potential match - extract the course name part
+                        // Use the first matching word to find where the course name starts
+                        for word in keyWords {
+                            if let wordRange = lowerText.range(of: word) {
+                                courseSection = String(lowerText[wordRange.lowerBound...]).trimmingCharacters(in: .whitespaces)
+                                break
+                            }
+                        }
+                        break
+                    }
+                }
+            }
+        }
+        
+        print("⛳ Looking for course in: '\(courseSection)'")
+        
+        // Extract tee color from course section if present
+        let courseSectionLower = courseSection.lowercased()
+        for teePattern in teeColorPatterns {
+            if courseSectionLower.contains(teePattern) {
+                // Map variations to standard capitalized names
+                if teePattern.contains("gray") || teePattern.contains("grey") {
+                    selectedTeeColor = "Gray"
+                } else if teePattern.contains("black") {
+                    selectedTeeColor = "Black"
+                } else if teePattern.contains("gold") {
+                    selectedTeeColor = "Gold"
+                } else if teePattern.contains("white") {
+                    selectedTeeColor = "White"
+                } else if teePattern.contains("blue") {
+                    selectedTeeColor = "Blue"
+                } else if teePattern.contains("green") {
+                    selectedTeeColor = "Green"
+                }
+                
+                // Remove tee color from course section for matching
+                courseSection = courseSection.replacingOccurrences(of: teePattern, with: "", options: .caseInsensitive)
+                courseSection = courseSection.trimmingCharacters(in: .whitespaces)
+                print("🎯 Found tee color: \(selectedTeeColor ?? "unknown")")
+                break
+            }
+        }
+        
+        // Try to match course name (now with tee color removed)
+        if !courseSection.isEmpty {
+            courseSection = courseSection.trimmingCharacters(in: .whitespaces)
             for course in courses {
                 let courseNameLower = course.name.lowercased()
-                // Match if any part of the course name matches
-                if courseNameLower.contains(courseName) || courseName.contains(courseNameLower) {
+                
+                // Strategy 1: Direct substring match (either direction)
+                if courseNameLower.contains(courseSection) || courseSection.contains(courseNameLower) {
                     selectedCourse = course
                     print("✅ Matched course: \(course.name)")
+                    break
+                }
+                
+                // Strategy 2: Match on key words (excluding common words)
+                let courseWords = courseNameLower.components(separatedBy: " ").filter { 
+                    !["the", "at", "club", "golf", "and"].contains($0) && $0.count > 2
+                }
+                let searchWords = courseSection.components(separatedBy: " ").filter { 
+                    !$0.isEmpty && $0.count > 2 
+                }
+                
+                // Count matching significant words
+                var matchCount = 0
+                for courseWord in courseWords {
+                    for searchWord in searchWords {
+                        if courseWord.contains(searchWord) || searchWord.contains(courseWord) {
+                            matchCount += 1
+                            break
+                        }
+                    }
+                }
+                
+                // Match if at least one significant word matches (for cases like "osprey cove")
+                if matchCount >= 1 {
+                    selectedCourse = course
+                    print("✅ Matched course: \(course.name) (matched \(matchCount) words)")
                     break
                 }
             }
@@ -183,7 +305,7 @@ struct ScorecardView: View {
         // Create the game
         if !foundPlayers.isEmpty {
             // Only one game can be active at a time, so deselect any current game
-            let newGame = Game(course: selectedCourse, players: foundPlayers)
+            let newGame = Game(course: selectedCourse, players: foundPlayers, selectedTeeColor: selectedTeeColor)
             modelContext.insert(newGame)
             
             do {
