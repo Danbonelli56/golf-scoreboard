@@ -34,6 +34,37 @@ final class Game {
     var holesScoresArray: [HoleScore] { holesScores ?? [] }
     var shotsArray: [Shot] { shots ?? [] }
     
+    // Computed property for effective tee color (selected or default from course)
+    var effectiveTeeColor: String? {
+        // Return selected tee color if set
+        if let selected = selectedTeeColor {
+            return selected
+        }
+        
+        // Otherwise, use priority: White > Green > first available
+        guard let course = course,
+              let holes = course.holes,
+              let firstHole = holes.first,
+              let teeDistances = firstHole.teeDistances else {
+            return nil
+        }
+        
+        let teeColors = Set(teeDistances.map { $0.teeColor })
+        
+        // Default to White if available
+        if teeColors.contains("White") {
+            return "White"
+        }
+        
+        // Fallback to Green if available
+        if teeColors.contains("Green") {
+            return "Green"
+        }
+        
+        // Otherwise, use first available
+        return teeDistances.first?.teeColor
+    }
+    
     // Computed properties for front 9, back 9, and total
     var front9Scores: [(player: Player, gross: Int, net: Int)] {
         let front9 = holesScoresArray.filter { $0.holeNumber <= 9 }

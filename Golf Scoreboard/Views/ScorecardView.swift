@@ -371,8 +371,49 @@ struct ScorecardView: View {
         
         // Create the game
         if !foundPlayers.isEmpty {
+            // Determine tee color to use: selected > player preference > White > Green > first available
+            let teeColorToUse: String? = {
+                if let selectedTee = selectedTeeColor {
+                    return selectedTee
+                }
+                
+                // Try player's preferred tee if available
+                if let currentUser = foundPlayers.first(where: { $0.isCurrentUser }),
+                   let preferredTee = currentUser.preferredTeeColor,
+                   let course = selectedCourse,
+                   let holes = course.holes,
+                   let firstHole = holes.first,
+                   let teeDistances = firstHole.teeDistances,
+                   teeDistances.contains(where: { $0.teeColor == preferredTee }) {
+                    return preferredTee
+                }
+                
+                // Use priority: White > Green > first available
+                if let course = selectedCourse,
+                   let holes = course.holes,
+                   let firstHole = holes.first,
+                   let teeDistances = firstHole.teeDistances {
+                    let teeColors = Set(teeDistances.map { $0.teeColor })
+                    
+                    // Default to White if available
+                    if teeColors.contains("White") {
+                        return "White"
+                    }
+                    
+                    // Fallback to Green if available
+                    if teeColors.contains("Green") {
+                        return "Green"
+                    }
+                    
+                    // Otherwise, use first available
+                    return teeDistances.first?.teeColor
+                }
+                
+                return nil
+            }()
+            
             // Only one game can be active at a time, so deselect any current game
-            let newGame = Game(course: selectedCourse, players: foundPlayers, selectedTeeColor: selectedTeeColor)
+            let newGame = Game(course: selectedCourse, players: foundPlayers, selectedTeeColor: teeColorToUse)
             modelContext.insert(newGame)
             
             do {

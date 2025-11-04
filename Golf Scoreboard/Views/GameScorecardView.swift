@@ -31,8 +31,8 @@ struct GameScorecardView: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    // Tee color display
-                    if let teeColor = game.selectedTeeColor {
+                    // Tee color display (always show if available)
+                    if let teeColor = game.effectiveTeeColor {
                         HStack {
                             Text("Tees: \(teeColor)")
                                 .font(.subheadline)

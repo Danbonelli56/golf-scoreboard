@@ -30,12 +30,24 @@ struct GameSetupView: View {
     }
     
     private var defaultTeeColor: String? {
-        // Find current user's preferred tee, or first available tee
+        // Priority: 1) Current user's preferred tee (if available), 2) White, 3) Green, 4) First available
         if let currentUser = players.first(where: { $0.isCurrentUser }),
            let preferredTee = currentUser.preferredTeeColor,
            availableTeeColors.contains(preferredTee) {
             return preferredTee
         }
+        
+        // Default to White if available
+        if availableTeeColors.contains("White") {
+            return "White"
+        }
+        
+        // Fallback to Green if available
+        if availableTeeColors.contains("Green") {
+            return "Green"
+        }
+        
+        // Otherwise, use first available
         return availableTeeColors.first
     }
     
@@ -141,13 +153,30 @@ struct GameSetupView: View {
     private func startGame() {
         let selectedPlayersArray = players.filter { selectedPlayers.contains($0.id) }
         
-        // Use selected tee color, or default to player's preferred tee, or nil if none specified
+        // Use selected tee color, or default using priority: player preference > White > Green > first available
         let teeColorToUse: String? = {
             if let selectedTee = selectedTeeColor {
                 return selectedTee
             }
-            // If no override selected, use default (player preference)
-            return defaultTeeColor
+            // Use computed default (already handles player preference > White > Green > first available)
+            if let defaultTee = defaultTeeColor {
+                return defaultTee
+            }
+            // Fallback: get tee using priority if defaultTeeColor is nil (shouldn't happen, but safe)
+            if let course = selectedCourse,
+               let holes = course.holes,
+               let firstHole = holes.first,
+               let teeDistances = firstHole.teeDistances {
+                let teeColors = Set(teeDistances.map { $0.teeColor })
+                if teeColors.contains("White") {
+                    return "White"
+                }
+                if teeColors.contains("Green") {
+                    return "Green"
+                }
+                return teeDistances.first?.teeColor
+            }
+            return nil
         }()
         
         let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse)
