@@ -17,6 +17,34 @@ struct GameScorecardView: View {
         fullName.components(separatedBy: " ").first ?? fullName
     }
     
+    // Helper to extract last initial
+    func lastInitial(from fullName: String) -> String? {
+        let parts = fullName.components(separatedBy: " ")
+        if parts.count > 1, let lastPart = parts.last, !lastPart.isEmpty {
+            return String(lastPart.prefix(1)).uppercased()
+        }
+        return nil
+    }
+    
+    // Display name for player - first name, or first name + last initial if duplicate first names
+    func displayName(for player: Player) -> String {
+        let players = game.playersArray
+        let playerFirstName = firstName(from: player.name)
+        
+        // Check if there are multiple players with the same first name
+        let duplicateFirstNames = players.filter { firstName(from: $0.name) == playerFirstName }.count > 1
+        
+        if duplicateFirstNames {
+            // Show first name + last initial
+            if let lastInitial = lastInitial(from: player.name) {
+                return "\(playerFirstName) \(lastInitial)."
+            }
+        }
+        
+        // Just show first name
+        return playerFirstName
+    }
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -70,7 +98,7 @@ struct GameScorecardView: View {
                         .fontWeight(.semibold)
                         
                         ForEach(game.playersArray) { player in
-                            Text(firstName(from: player.name))
+                            Text(displayName(for: player))
                             .frame(maxWidth: .infinity)
                             .font(.caption)
                             .fontWeight(.semibold)
