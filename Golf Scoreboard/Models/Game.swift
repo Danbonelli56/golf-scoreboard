@@ -88,29 +88,24 @@ final class Game {
         let handicap = useHalfHandicap ? player.handicap / 2.0 : player.handicap
         let handicapInt = Int(round(handicap))
         
-        // Base strokes: 1 stroke per 18 holes of handicap
-        // Handicap 20: baseStrokes = 1 (means 1 stroke on all 18 holes)
-        // Handicap 13: baseStrokes = 0
-        let baseStrokes = handicapInt / 18
+        // For handicap <= 18: get 1 stroke on holes with HCP 1 through handicap
+        // Example: Handicap 13 gets 1 stroke on HCP holes 1-13
+        if handicapInt <= 18 {
+            return holeHandicap <= handicapInt ? 1 : 0
+        }
         
-        // Remainder: additional strokes beyond full 18-hole increments
-        // Handicap 20: remainder = 2 (extra strokes on 2 hardest holes)
-        // Handicap 13: remainder = 13 (strokes on 13 hardest holes)
-        let remainder = handicapInt % 18
+        // For handicap > 18: 
+        // - Base: 1 stroke on all 18 holes (HCP 1-18)
+        // - Extra: Additional strokes on hardest holes based on remainder
+        // Example: Handicap 20 = 18 base + 2 remainder, so 1 stroke on all holes + 1 extra on HCP 1-2
+        let baseStrokes = 1 // All holes get at least 1 stroke
+        let remainder = handicapInt % 18 // Extra strokes on hardest holes
         
-        // If there's a remainder, holes with HCP <= remainder get an extra stroke
         if remainder > 0 && holeHandicap <= remainder {
-            return baseStrokes + 1
+            return baseStrokes + 1 // Extra stroke on hardest holes
         }
         
-        // For handicap <= 18 with no base strokes, only holes with HCP <= handicap get strokes
-        // This case is already covered above, but keep for clarity
-        if baseStrokes == 0 && holeHandicap <= handicapInt {
-            return 1
-        }
-        
-        // Return base strokes (for handicap > 18, holes beyond remainder get base strokes only)
-        return baseStrokes
+        return baseStrokes // Standard stroke on all other holes
     }
     
     // Calculate net score for a specific hole
