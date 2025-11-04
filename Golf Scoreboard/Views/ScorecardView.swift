@@ -158,7 +158,9 @@ struct ScorecardView: View {
         // Match to actual players
         for name in playerNames {
             let nameLower = name.lowercased()
+            print("  🔍 Looking for player: '\(name)'")
             
+            var foundThisPlayer = false
             for player in players {
                 let playerNameLower = player.name.lowercased()
                 let nameParts = playerNameLower.components(separatedBy: " ")
@@ -168,20 +170,40 @@ struct ScorecardView: View {
                 if firstName == nameLower || lastName == nameLower || playerNameLower == nameLower {
                     if !foundPlayers.contains(where: { $0.id == player.id }) {
                         foundPlayers.append(player)
-                        print("✅ Matched player: \(player.name)")
+                        foundThisPlayer = true
+                        print("  ✅ Matched player: '\(name)' -> \(player.name)")
+                        break
                     }
                 }
             }
+            
+            if !foundThisPlayer {
+                print("  ❌ Could not match player: '\(name)'")
+            }
         }
+        
+        print("👥 Total players matched: \(foundPlayers.count)")
         
         // Extract course name and tee color
         var selectedCourse: GolfCourse? = nil
         var selectedTeeColor: String? = nil
         
         // Common tee color patterns to remove from course name matching
-        let teeColorPatterns = ["black tees", "gold tees", "white tees", "blue tees", "green tees", "gray tees", "grey tees",
-                               "black tee", "gold tee", "white tee", "blue tee", "green tee", "gray tee", "grey tee",
-                               "black", "gold", "white", "blue", "green", "gray", "grey"]
+        // Include common speech recognition errors: "tees" -> "tease", "tea", "teas"
+        let teeColorPatterns = [
+            // Full patterns with "tees" variations
+            "black tees", "black tease", "black tea", "black teas",
+            "gold tees", "gold tease", "gold tea", "gold teas",
+            "white tees", "white tease", "white tea", "white teas",
+            "blue tees", "blue tease", "blue tea", "blue teas",
+            "green tees", "green tease", "green tea", "green teas",
+            "gray tees", "gray tease", "gray tea", "gray teas",
+            "grey tees", "grey tease", "grey tea", "grey teas",
+            // Singular forms
+            "black tee", "gold tee", "white tee", "blue tee", "green tee", "gray tee", "grey tee",
+            // Just colors (fallback)
+            "black", "gold", "white", "blue", "green", "gray", "grey"
+        ]
         
         // Try to find course - look for "at" first, then try without "at"
         var courseSection: String = ""
@@ -232,11 +254,15 @@ struct ScorecardView: View {
             }
         }
         
-        print("⛳ Looking for course in: '\(courseSection)'")
+        print("⛳ Initial course section: '\(courseSection)'")
         
         // Extract tee color from course section if present
         let courseSectionLower = courseSection.lowercased()
-        for teePattern in teeColorPatterns {
+        
+        // Check patterns in order - longest first to catch "black tees" before just "black"
+        let sortedPatterns = teeColorPatterns.sorted { $0.count > $1.count }
+        
+        for teePattern in sortedPatterns {
             if courseSectionLower.contains(teePattern) {
                 // Map variations to standard capitalized names
                 if teePattern.contains("gray") || teePattern.contains("grey") {
@@ -253,10 +279,18 @@ struct ScorecardView: View {
                     selectedTeeColor = "Green"
                 }
                 
-                // Remove tee color from course section for matching
-                courseSection = courseSection.replacingOccurrences(of: teePattern, with: "", options: .caseInsensitive)
-                courseSection = courseSection.trimmingCharacters(in: .whitespaces)
-                print("🎯 Found tee color: \(selectedTeeColor ?? "unknown")")
+                // Remove tee color pattern from course section for matching
+                var cleanedSection = courseSection
+                // Replace the pattern case-insensitively
+                cleanedSection = cleanedSection.replacingOccurrences(of: teePattern, with: "", options: .caseInsensitive)
+                // Clean up extra spaces that might result
+                while cleanedSection.contains("  ") {
+                    cleanedSection = cleanedSection.replacingOccurrences(of: "  ", with: " ")
+                }
+                courseSection = cleanedSection.trimmingCharacters(in: .whitespaces)
+                
+                print("🎯 Found tee color: \(selectedTeeColor ?? "unknown") from pattern: '\(teePattern)'")
+                print("🎯 Course section after tee removal: '\(courseSection)'")
                 break
             }
         }
@@ -264,13 +298,22 @@ struct ScorecardView: View {
         // Try to match course name (now with tee color removed)
         if !courseSection.isEmpty {
             courseSection = courseSection.trimmingCharacters(in: .whitespaces)
+            print("🔍 Matching course with cleaned section: '\(courseSection)'")
+            
             for course in courses {
                 let courseNameLower = course.name.lowercased()
+                print("  📍 Trying course: '\(course.name)'")
                 
                 // Strategy 1: Direct substring match (either direction)
-                if courseNameLower.contains(courseSection) || courseSection.contains(courseNameLower) {
+                if courseNameLower.contains(courseSection) {
                     selectedCourse = course
-                    print("✅ Matched course: \(course.name)")
+                    print("✅ Matched course: \(course.name) (contains match)")
+                    break
+                }
+                
+                if courseSection.contains(courseNameLower) {
+                    selectedCourse = course
+                    print("✅ Matched course: \(course.name) (reverse contains match)")
                     break
                 }
                 
@@ -282,24 +325,48 @@ struct ScorecardView: View {
                     !$0.isEmpty && $0.count > 2 
                 }
                 
-                // Count matching significant words
+                print("  📝 Course words: \(courseWords), Search words: \(searchWords)")
+                
+                // Check if all search words are found in course words (for multi-word searches like "amelia river")
+                var allWordsMatched = true
                 var matchCount = 0
-                for courseWord in courseWords {
-                    for searchWord in searchWords {
-                        if courseWord.contains(searchWord) || searchWord.contains(courseWord) {
+                
+                for searchWord in searchWords {
+                    var wordFound = false
+                    for courseWord in courseWords {
+                        if courseWord == searchWord || courseWord.contains(searchWord) || searchWord.contains(courseWord) {
                             matchCount += 1
+                            wordFound = true
+                            print("  ✅ Matched word: '\(courseWord)' with '\(searchWord)'")
                             break
                         }
                     }
+                    if !wordFound {
+                        allWordsMatched = false
+                        print("  ❌ Search word '\(searchWord)' not found in course")
+                    }
                 }
                 
-                // Match if at least one significant word matches (for cases like "osprey cove")
-                if matchCount >= 1 {
+                // Match if all search words are found, or if at least one significant word matches
+                if allWordsMatched && !searchWords.isEmpty {
                     selectedCourse = course
-                    print("✅ Matched course: \(course.name) (matched \(matchCount) words)")
+                    print("✅ Matched course: \(course.name) (all \(searchWords.count) words matched)")
                     break
+                } else if matchCount >= 1 && searchWords.count == 1 {
+                    // For single-word searches, allow partial match
+                    selectedCourse = course
+                    print("✅ Matched course: \(course.name) (matched \(matchCount) word)")
+                    break
+                } else {
+                    print("  ❌ No match for '\(course.name)' (matched \(matchCount)/\(searchWords.count) words)")
                 }
             }
+            
+            if selectedCourse == nil {
+                print("⚠️ No course matched for section: '\(courseSection)'")
+            }
+        } else {
+            print("⚠️ Course section is empty after processing")
         }
         
         // Create the game
@@ -543,4 +610,5 @@ struct EmptyStateView: View {
     ScorecardView()
         .modelContainer(for: [GolfCourse.self, Player.self, Game.self], inMemory: true)
 }
+
 
