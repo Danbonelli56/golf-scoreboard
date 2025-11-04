@@ -169,6 +169,15 @@ struct SettingsCourseDetailView: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
     
+    private var uniqueTeeColors: [String] {
+        let teeColors = Set((course.holes ?? []).flatMap { ($0.teeDistances ?? []).map { $0.teeColor } })
+        return teeColors.sorted()
+    }
+    
+    private var sortedHoles: [Hole] {
+        (course.holes ?? []).sorted(by: { $0.holeNumber < $1.holeNumber })
+    }
+    
     var body: some View {
         Form {
             Section {
@@ -179,9 +188,64 @@ struct SettingsCourseDetailView: View {
                 Text("Course Name")
             }
             
-            if let holes = course.holes, !holes.isEmpty {
+            // Display course summary info if tee sets exist
+            if let teeSets = course.teeSets, !teeSets.isEmpty {
                 Section {
-                    ForEach(holes.sorted(by: { $0.holeNumber < $1.holeNumber })) { hole in
+                    ForEach(teeSets.sorted(by: { $0.teeColor < $1.teeColor }), id: \.teeColor) { teeSet in
+                        HStack {
+                            Text(teeSet.teeColor)
+                                .fontWeight(.semibold)
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("Rating: \(String(format: "%.1f", teeSet.rating))")
+                                Text("Slope: \(Int(teeSet.slope))")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Tee Sets")
+                }
+            }
+            
+            // Display hole details grouped by tee color
+            if !uniqueTeeColors.isEmpty {
+                ForEach(uniqueTeeColors, id: \.self) { teeColor in
+                    Section {
+                        ForEach(sortedHoles, id: \.holeNumber) { hole in
+                            if let teeDistance = (hole.teeDistances ?? []).first(where: { $0.teeColor == teeColor }) {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Hole \(hole.holeNumber)")
+                                            .fontWeight(.semibold)
+                                        Text("Par \(hole.par)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text("\(teeDistance.distanceYards) yds")
+                                            .fontWeight(.medium)
+                                        if hole.mensHandicap > 0 {
+                                            Text("HCP \(hole.mensHandicap)")
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("\(teeColor) Tees")
+                    }
+                }
+            } else if let holes = course.holes, !holes.isEmpty {
+                // Fallback: show basic hole info if no tee distances
+                Section {
+                    ForEach(sortedHoles, id: \.holeNumber) { hole in
                         HStack {
                             Text("Hole \(hole.holeNumber)")
                                 .fontWeight(.semibold)
