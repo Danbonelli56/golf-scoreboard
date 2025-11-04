@@ -27,40 +27,58 @@ struct Golf_ScoreboardApp: App {
         do {
             let container = try ModelContainer(for: schema, configurations: [modelConfiguration])
             
-            // Only import courses if database is empty (first launch)
+            // Check and import default courses if they don't exist
             let allCourses = try? container.mainContext.fetch(FetchDescriptor<GolfCourse>())
+            var coursesAdded = false
             
-            if let courses = allCourses, courses.isEmpty {
-                print("📦 First launch - importing default courses")
+            if let courses = allCourses {
+                // Check if Amelia River Club exists, if not, create it
+                if !courses.contains(where: { $0.name == "The Amelia River Club" }) {
+                    print("📦 Adding The Amelia River Club")
+                    _ = CourseImporter.createAmeliaRiverClub(context: container.mainContext)
+                    coursesAdded = true
+                }
                 
-                // Check if Amelia River Club already exists, if not, create it
-                _ = CourseImporter.createAmeliaRiverClub(context: container.mainContext)
-                
-                // Check if North Hampton already exists, if not, create it
-                _ = CourseImporter.createNorthHamptonGolfClub(context: container.mainContext)
-                
-                // Check if Laurel Island Links already exists, if not, create it
-                _ = CourseImporter.createLaurelIslandLinks(context: container.mainContext)
-                
-                // Check if The Club at Osprey Cove already exists, if not, create it
-                _ = CourseImporter.createClubAtOspreyCove(context: container.mainContext)
-                
-                try? container.mainContext.save()
-                print("✅ Default courses imported")
-            } else {
-                print("ℹ️ Courses already exist in database")
-                // Check for North Hampton and add white tees if missing
-                if let courses = allCourses, let northHampton = courses.first(where: { $0.name == "The Golf Club at North Hampton" }) {
-                    if let holes = northHampton.holes {
-                        let allHolesHaveWhite = holes.allSatisfy { hole in
-                            (hole.teeDistances ?? []).contains { $0.teeColor.lowercased() == "white" }
-                        }
-                        if !allHolesHaveWhite {
-                            print("⚠️ Adding white tees to North Hampton")
-                            CourseImporter.addWhiteTeesToNorthHampton(course: northHampton, context: container.mainContext)
-                            try? container.mainContext.save()
+                // Check if North Hampton exists, if not, create it
+                if !courses.contains(where: { $0.name == "The Golf Club at North Hampton" }) {
+                    print("📦 Adding The Golf Club at North Hampton")
+                    _ = CourseImporter.createNorthHamptonGolfClub(context: container.mainContext)
+                    coursesAdded = true
+                } else {
+                    // Check for North Hampton and add white tees if missing
+                    if let northHampton = courses.first(where: { $0.name == "The Golf Club at North Hampton" }) {
+                        if let holes = northHampton.holes {
+                            let allHolesHaveWhite = holes.allSatisfy { hole in
+                                (hole.teeDistances ?? []).contains { $0.teeColor.lowercased() == "white" }
+                            }
+                            if !allHolesHaveWhite {
+                                print("⚠️ Adding white tees to North Hampton")
+                                CourseImporter.addWhiteTeesToNorthHampton(course: northHampton, context: container.mainContext)
+                                coursesAdded = true
+                            }
                         }
                     }
+                }
+                
+                // Check if Laurel Island Links exists, if not, create it
+                if !courses.contains(where: { $0.name == "Laurel Island Links" }) {
+                    print("📦 Adding Laurel Island Links")
+                    _ = CourseImporter.createLaurelIslandLinks(context: container.mainContext)
+                    coursesAdded = true
+                }
+                
+                // Check if The Club at Osprey Cove exists, if not, create it
+                if !courses.contains(where: { $0.name == "The Club at Osprey Cove" }) {
+                    print("📦 Adding The Club at Osprey Cove")
+                    _ = CourseImporter.createClubAtOspreyCove(context: container.mainContext)
+                    coursesAdded = true
+                }
+                
+                if coursesAdded {
+                    try? container.mainContext.save()
+                    print("✅ Default courses imported")
+                } else {
+                    print("ℹ️ All default courses already exist")
                 }
             }
             
