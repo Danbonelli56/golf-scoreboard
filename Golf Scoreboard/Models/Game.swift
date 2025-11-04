@@ -66,14 +66,15 @@ final class Game {
     }
     
     // Computed properties for front 9, back 9, and total
+    // These should sum the net scores from individual holes, not recalculate with different handicap
     var front9Scores: [(player: Player, gross: Int, net: Int)] {
         let front9 = holesScoresArray.filter { $0.holeNumber <= 9 }
-        return calculateScores(holesScores: front9, useHalfHandicap: true)
+        return calculateScores(holesScores: front9, useHalfHandicap: false)
     }
     
     var back9Scores: [(player: Player, gross: Int, net: Int)] {
         let back9 = holesScoresArray.filter { $0.holeNumber > 9 }
-        return calculateScores(holesScores: back9, useHalfHandicap: true)
+        return calculateScores(holesScores: back9, useHalfHandicap: false)
     }
     
     var totalScores: [(player: Player, gross: Int, net: Int)] {
