@@ -27,6 +27,9 @@ class CourseImporter {
         // Ladies' handicaps
         let ladiesHandicaps = [11, 13, 7, 17, 5, 9, 15, 3, 1, 14, 10, 18, 4, 8, 12, 2, 16, 6]
         
+        // Gold tees distances
+        let goldDistances = [551, 371, 385, 206, 557, 382, 218, 396, 420, 366, 384, 196, 587, 360, 356, 431, 164, 548]
+        
         // Blue tees distances
         let blueDistances = [521, 337, 372, 176, 521, 356, 190, 363, 389, 339, 357, 160, 538, 338, 325, 407, 147, 513]
         
@@ -46,11 +49,13 @@ class CourseImporter {
             )
             
             // Add tee distances
+            let goldTee = TeeDistance(teeColor: "Gold", distanceYards: goldDistances[i])
             let blueTee = TeeDistance(teeColor: "Blue", distanceYards: blueDistances[i])
             let blackTee = TeeDistance(teeColor: "Black", distanceYards: blackDistances[i])
             let whiteTee = TeeDistance(teeColor: "White", distanceYards: whiteDistances[i])
             
             if hole.teeDistances == nil { hole.teeDistances = [] }
+            hole.teeDistances!.append(goldTee)
             hole.teeDistances!.append(blueTee)
             hole.teeDistances!.append(blackTee)
             hole.teeDistances!.append(whiteTee)
@@ -129,6 +134,32 @@ class CourseImporter {
         
         context.insert(course)
         return course
+    }
+    
+    static func addGoldTeesToAmeliaRiverClub(course: GolfCourse, context: ModelContext) {
+        // Gold tees distances from scorecard
+        let goldDistances = [551, 371, 385, 206, 557, 382, 218, 396, 420, 366, 384, 196, 587, 360, 356, 431, 164, 548]
+        
+        let holes = (course.holes ?? []).sorted { $0.holeNumber < $1.holeNumber }
+        for (index, hole) in holes.enumerated() {
+            if index < goldDistances.count {
+                // Check if gold tee already exists for this hole
+                let hasGoldTee = (hole.teeDistances ?? []).contains { $0.teeColor.lowercased() == "gold" }
+                if !hasGoldTee {
+                    let goldTee = TeeDistance(teeColor: "Gold", distanceYards: goldDistances[index])
+                    if hole.teeDistances == nil { hole.teeDistances = [] }
+                    hole.teeDistances!.append(goldTee)
+                }
+            }
+        }
+        
+        // Add gold tee set if it doesn't exist
+        let hasGoldTeeSet = (course.teeSets ?? []).contains { $0.teeColor.lowercased() == "gold" }
+        if !hasGoldTeeSet {
+            let goldTeeSet = TeeSet(teeColor: "Gold", slope: 140.0, rating: 73.1)
+            if course.teeSets == nil { course.teeSets = [] }
+            course.teeSets!.append(goldTeeSet)
+        }
     }
     
     static func addWhiteTeesToNorthHampton(course: GolfCourse, context: ModelContext) {

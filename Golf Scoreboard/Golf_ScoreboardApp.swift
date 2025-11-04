@@ -37,6 +37,20 @@ struct Golf_ScoreboardApp: App {
                     print("📦 Adding The Amelia River Club")
                     _ = CourseImporter.createAmeliaRiverClub(context: container.mainContext)
                     coursesAdded = true
+                } else {
+                    // Check for Amelia River Club and add gold tees if missing
+                    if let ameliaRiver = courses.first(where: { $0.name == "The Amelia River Club" }) {
+                        if let holes = ameliaRiver.holes {
+                            let allHolesHaveGold = holes.allSatisfy { hole in
+                                (hole.teeDistances ?? []).contains { $0.teeColor.lowercased() == "gold" }
+                            }
+                            if !allHolesHaveGold {
+                                print("⚠️ Adding gold tees to Amelia River Club")
+                                CourseImporter.addGoldTeesToAmeliaRiverClub(course: ameliaRiver, context: container.mainContext)
+                                coursesAdded = true
+                            }
+                        }
+                    }
                 }
                 
                 // Check if North Hampton exists, if not, create it
