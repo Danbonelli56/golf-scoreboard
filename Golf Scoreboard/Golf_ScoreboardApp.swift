@@ -39,6 +39,9 @@ struct Golf_ScoreboardApp: App {
                 // Check if North Hampton already exists, if not, create it
                 _ = CourseImporter.createNorthHamptonGolfClub(context: container.mainContext)
                 
+                // Check if Laurel Island Links already exists, if not, create it
+                _ = CourseImporter.createLaurelIslandLinks(context: container.mainContext)
+                
                 try? container.mainContext.save()
                 print("✅ Default courses imported")
             } else {

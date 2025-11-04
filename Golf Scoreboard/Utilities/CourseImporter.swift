@@ -157,6 +157,61 @@ class CourseImporter {
         }
     }
     
+    static func createLaurelIslandLinks(context: ModelContext) -> GolfCourse {
+        let course = GolfCourse(
+            name: "Laurel Island Links",
+            location: "Kingsland, GA",
+            slope: 126, // Using White tees as reference
+            rating: 70.2
+        )
+        
+        // Par values
+        let pars = [4, 4, 3, 5, 4, 5, 4, 3, 4, 4, 3, 4, 5, 4, 5, 4, 3, 4]
+        
+        // Men's handicaps
+        let mensHandicaps = [8, 2, 12, 14, 18, 6, 4, 16, 10, 1, 15, 7, 9, 3, 11, 13, 17, 5]
+        
+        // White tees distances
+        let whiteDistances = [344, 369, 160, 456, 286, 538, 380, 130, 325, 409, 154, 391, 494, 401, 512, 328, 148, 378]
+        
+        // Green tees distances
+        let greenDistances = [320, 336, 135, 440, 256, 481, 340, 109, 307, 365, 118, 345, 398, 335, 459, 295, 129, 328]
+        
+        // Create holes with distances
+        for i in 0..<18 {
+            let hole = Hole(
+                holeNumber: i + 1,
+                par: pars[i],
+                mensHandicap: mensHandicaps[i]
+            )
+            
+            // Add tee distances
+            let whiteTee = TeeDistance(teeColor: "White", distanceYards: whiteDistances[i])
+            let greenTee = TeeDistance(teeColor: "Green", distanceYards: greenDistances[i])
+            
+            if hole.teeDistances == nil { hole.teeDistances = [] }
+            hole.teeDistances!.append(whiteTee)
+            hole.teeDistances!.append(greenTee)
+            
+            if course.holes == nil { course.holes = [] }
+            course.holes!.append(hole)
+        }
+        
+        // Add tee sets with slope and rating
+        let teeSets = [
+            TeeSet(teeColor: "White", slope: 126.0, rating: 70.2),
+            TeeSet(teeColor: "Green", slope: 114.0, rating: 67.0)
+        ]
+        
+        if course.teeSets == nil { course.teeSets = [] }
+        for teeSet in teeSets {
+            course.teeSets!.append(teeSet)
+        }
+        
+        context.insert(course)
+        return course
+    }
+    
     // MARK: - JSON Import/Export
     
     static func exportCourseToJSON(_ course: GolfCourse) -> String? {
