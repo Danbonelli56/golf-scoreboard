@@ -14,5 +14,7 @@
 	<string>This app needs access to speech recognition to allow you to input scores by voice.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app needs access to the microphone to allow you to input scores by voice.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app needs access to your calendar to find golf events created by Schedule Golf app.</string>
 </dict>
 </plist>

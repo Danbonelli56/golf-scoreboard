@@ -54,6 +54,17 @@ struct GameSetupView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section {
+                    NavigationLink("Import from Calendar") {
+                        CalendarImportView(selectedGameIDString: $selectedGameIDString, games: games)
+                    }
+                    .foregroundColor(.blue)
+                } header: {
+                    Text("Quick Import")
+                } footer: {
+                    Text("Search calendar for golf events in the next 2 days")
+                }
+                
                 Section("Course") {
                     if courses.isEmpty {
                         Text("No courses available. Add courses first.")
