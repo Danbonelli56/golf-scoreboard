@@ -11,7 +11,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		F193735D2EB2D20D0047B669 /* Exceptions for "Golf Scoreboard" folder in "Golf Scoreboard" target */ = {
+		F1B4B9182EBAD9550010FE62 /* Exceptions for "Golf Scoreboard" folder in "Golf Scoreboard" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -24,7 +24,7 @@
 		F19373522EB2D20D0047B669 /* Golf Scoreboard */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				F193735D2EB2D20D0047B669 /* Exceptions for "Golf Scoreboard" folder in "Golf Scoreboard" target */,
+				F1B4B9182EBAD9550010FE62 /* Exceptions for "Golf Scoreboard" folder in "Golf Scoreboard" target */,
 			);
 			path = "Golf Scoreboard";
 			sourceTree = "<group>";
@@ -148,7 +148,7 @@
 				CURRENT_PROJECT_VERSION = 39;
 				DEVELOPMENT_TEAM = 4PZK74YZP9;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Golf Scoreboard/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -178,7 +178,7 @@
 				CURRENT_PROJECT_VERSION = 39;
 				DEVELOPMENT_TEAM = 4PZK74YZP9;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Golf Scoreboard/Info.plist";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
