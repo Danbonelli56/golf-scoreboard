@@ -71,6 +71,29 @@ struct PlayerRow: View {
                 Text("Handicap: \(String(format: "%.1f", player.handicap))")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                
+                // Show email and phone if available
+                if let email = player.email, !email.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "envelope")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(email)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                if let phone = player.phoneNumber, !phone.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "phone")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(phone)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                }
             }
             
             Spacer()

@@ -19,10 +19,10 @@ final class Game {
     var createdAt: Date?
     var selectedTeeColor: String? // Override tee color for this game
     
-    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil) {
+    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil) {
         self.id = UUID()
         self.course = course
-        self.date = Date()
+        self.date = date ?? Date()
         self.players = players
         self.holesScores = []
         self.createdAt = nil

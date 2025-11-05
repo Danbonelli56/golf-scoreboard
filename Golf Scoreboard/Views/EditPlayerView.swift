@@ -17,6 +17,8 @@ struct EditPlayerView: View {
     @State private var handicapText: String
     @State private var isCurrentUser: Bool
     @State private var preferredTeeColor: String
+    @State private var email: String
+    @State private var phoneNumber: String
     
     private var handicap: Double {
         Double(handicapText) ?? 0.0
@@ -28,6 +30,8 @@ struct EditPlayerView: View {
         _handicapText = State(initialValue: String(format: "%.1f", player.handicap))
         _isCurrentUser = State(initialValue: player.isCurrentUser)
         _preferredTeeColor = State(initialValue: player.preferredTeeColor ?? "White")
+        _email = State(initialValue: player.email ?? "")
+        _phoneNumber = State(initialValue: player.phoneNumber ?? "")
     }
     
     var body: some View {
@@ -39,6 +43,13 @@ struct EditPlayerView: View {
                     
                     TextField("Handicap", text: $handicapText)
                         .keyboardType(.decimalPad)
+                    
+                    TextField("Email", text: $email)
+                        .keyboardType(.emailAddress)
+                        .autocapitalization(.none)
+                    
+                    TextField("Phone Number", text: $phoneNumber)
+                        .keyboardType(.phonePad)
                     
                     Toggle("Current User", isOn: $isCurrentUser)
                     
@@ -84,6 +95,8 @@ struct EditPlayerView: View {
         player.handicap = handicap
         player.isCurrentUser = isCurrentUser
         player.preferredTeeColor = preferredTeeColor
+        player.email = email.isEmpty ? nil : email
+        player.phoneNumber = phoneNumber.isEmpty ? nil : phoneNumber
         
         try? modelContext.save()
         dismiss()
