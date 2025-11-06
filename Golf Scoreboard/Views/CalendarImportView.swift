@@ -197,8 +197,12 @@ struct CalendarEventRow: View {
             }
             
             Button("Import Game") {
+                // Match course and players before showing sheet
                 matchCourseAndPlayers()
-                showingImportSheet = true
+                // Small delay to ensure state is updated before sheet appears
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    showingImportSheet = true
+                }
             }
             .buttonStyle(.bordered)
             .padding(.top, 4)
@@ -220,44 +224,130 @@ struct CalendarEventRow: View {
                 }
             )
         }
+        .onChange(of: showingImportSheet) { oldValue, newValue in
+            // Re-match when sheet is about to show
+            if newValue && !oldValue {
+                matchCourseAndPlayers()
+            }
+        }
     }
     
     private func matchCourseAndPlayers() {
         // Fuzzy match course
+        print("🔍 Attempting to match course: '\(event.courseName)'")
+        print("📋 Available courses: \(courses.map { $0.name })")
         matchedCourse = findMatchingCourse(event.courseName)
+        if let matched = matchedCourse {
+            print("✅ Matched calendar course '\(event.courseName)' to database course '\(matched.name)'")
+        } else {
+            print("❌ Could not match calendar course '\(event.courseName)' to any database course")
+        }
         
-        // Fuzzy match players
+        // Fuzzy match players - use the improved matching logic
         matchedPlayers = event.players.compactMap { name in
-            findMatchingPlayer(name)
+            let matched = findMatchingPlayer(name)
+            if let matched = matched {
+                print("✅ Matched calendar player '\(name)' to database player '\(matched.name)'")
+            } else {
+                print("❌ Could not match calendar player '\(name)' to any database player")
+            }
+            return matched
         }
     }
     
     private func findMatchingCourse(_ courseName: String) -> GolfCourse? {
-        let searchName = courseName.lowercased()
+        let searchName = courseName.lowercased().trimmingCharacters(in: .whitespaces)
+        print("  🔍 Searching for course: '\(searchName)'")
+        
+        // Normalize by removing common words
+        let normalizedSearch = searchName
+            .replacingOccurrences(of: "golf at ", with: "", options: .caseInsensitive)
+            .replacingOccurrences(of: "golf ", with: "", options: .caseInsensitive)
+            .trimmingCharacters(in: .whitespaces)
+        print("  📝 Normalized search: '\(normalizedSearch)'")
         
         // First try exact match
-        if let exact = courses.first(where: { $0.name.lowercased() == searchName }) {
+        if let exact = courses.first(where: { $0.name.lowercased() == searchName || $0.name.lowercased() == normalizedSearch }) {
+            print("  ✅ Found exact match: '\(exact.name)'")
             return exact
         }
         
-        // Try partial match (contains)
-        if let partial = courses.first(where: { $0.name.lowercased().contains(searchName) || searchName.contains($0.name.lowercased()) }) {
+        // Try match without "The" prefix
+        let searchWithoutThe = normalizedSearch.replacingOccurrences(of: "^the ", with: "", options: [.caseInsensitive, .regularExpression])
+        print("  🔍 Trying without 'The': '\(searchWithoutThe)'")
+        for course in courses {
+            let courseNameLower = course.name.lowercased()
+            let courseWithoutThe = courseNameLower.replacingOccurrences(of: "^the ", with: "", options: [.caseInsensitive, .regularExpression])
+            
+            if courseNameLower == normalizedSearch || courseWithoutThe == searchWithoutThe {
+                print("  ✅ Found match without 'The': '\(course.name)'")
+                return course
+            }
+        }
+        
+        // Try partial match (contains) - both directions
+        if let partial = courses.first(where: { course in
+            let courseNameLower = course.name.lowercased()
+            let matches = courseNameLower.contains(normalizedSearch) || normalizedSearch.contains(courseNameLower)
+            if matches {
+                print("  ✅ Found partial match: '\(course.name)' contains or is contained by '\(normalizedSearch)'")
+            }
+            return matches
+        }) {
             return partial
         }
         
-        // Try keyword matching (e.g., "Amelia River Club" matches "The Amelia River Club")
-        let keywords = searchName.components(separatedBy: .whitespaces).filter { $0.count > 3 }
-        for keyword in keywords {
-            if let match = courses.first(where: { $0.name.lowercased().contains(keyword) }) {
-                return match
+        // Try partial match without "The" prefix
+        if let partial = courses.first(where: { course in
+            let courseNameLower = course.name.lowercased()
+            let courseWithoutThe = courseNameLower.replacingOccurrences(of: "^the ", with: "", options: [.caseInsensitive, .regularExpression])
+            let matches = courseWithoutThe.contains(searchWithoutThe) || searchWithoutThe.contains(courseWithoutThe)
+            if matches {
+                print("  ✅ Found partial match (no 'The'): '\(course.name)' matches '\(searchWithoutThe)'")
+            }
+            return matches
+        }) {
+            return partial
+        }
+        
+        // Try keyword matching - match on significant words (ignore "the", "at", "club", "golf")
+        let searchWords = normalizedSearch.components(separatedBy: .whitespaces)
+            .filter { word in
+                let lower = word.lowercased()
+                return lower.count > 2 && !["the", "at", "club", "golf", "and"].contains(lower)
+            }
+        
+        if !searchWords.isEmpty {
+            // Find course that contains all significant words
+            for course in courses {
+                let courseNameLower = course.name.lowercased()
+                let courseWords = courseNameLower.components(separatedBy: .whitespaces)
+                    .filter { word in
+                        let lower = word.lowercased()
+                        return lower.count > 2 && !["the", "at", "club", "golf", "and"].contains(lower)
+                    }
+                
+                // Check if all search words are found in course name
+                let allWordsMatch = searchWords.allSatisfy { searchWord in
+                    courseWords.contains { $0.contains(searchWord) || searchWord.contains($0) }
+                }
+                
+                if allWordsMatch {
+                    return course
+                }
             }
         }
         
         // Try matching from location address if available
         if let location = event.location {
-            let locationKeywords = location.lowercased().components(separatedBy: .whitespaces).filter { $0.count > 3 }
+            let locationKeywords = location.lowercased().components(separatedBy: .whitespaces)
+                .filter { $0.count > 3 && !["saint", "st", "street", "drive", "road", "avenue", "ave", "dr", "rd"].contains($0.lowercased()) }
+            
             for keyword in locationKeywords {
-                if let match = courses.first(where: { $0.name.lowercased().contains(keyword) }) {
+                if let match = courses.first(where: { course in
+                    let courseNameLower = course.name.lowercased()
+                    return courseNameLower.contains(keyword) || (course.location?.lowercased().contains(keyword) ?? false)
+                }) {
                     return match
                 }
             }
@@ -268,64 +358,154 @@ struct CalendarEventRow: View {
     
     private func findMatchingPlayer(_ name: String) -> Player? {
         let searchName = name.lowercased().trimmingCharacters(in: .whitespaces)
-        let nameParts = searchName.components(separatedBy: .whitespaces)
+        let nameParts = searchName.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
         
-        // Try exact match first
-        if let exact = players.first(where: { $0.name.lowercased() == searchName }) {
+        // Try exact match first (case-insensitive, trimmed)
+        if let exact = players.first(where: { $0.name.lowercased().trimmingCharacters(in: .whitespaces) == searchName }) {
             return exact
         }
         
-        // Try matching by last name (most reliable)
+        // Try matching by last name (most reliable) - check if last name matches
         if nameParts.count >= 2 {
-            let lastName = nameParts.last!
+            let lastName = nameParts.last!.lowercased()
             if let match = players.first(where: { player in
-                let playerParts = player.name.lowercased().components(separatedBy: .whitespaces)
+                let playerNameLower = player.name.lowercased().trimmingCharacters(in: .whitespaces)
+                let playerParts = playerNameLower.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                // Check if last names match exactly
+                if let playerLastName = playerParts.last, playerLastName == lastName {
+                    return true
+                }
+                // Also check if any part of player name contains the last name
                 return playerParts.contains(lastName)
             }) {
                 return match
             }
         }
         
-        // Try fuzzy first name matching (Dave/David, Dan/Daniel, etc.)
+        // Try matching by first name with nickname variations
         if let firstName = nameParts.first {
+            // Comprehensive nickname map - each key maps to all possible variations
             let nicknameMap: [String: [String]] = [
-                "dave": ["david", "dave"],
+                "dave": ["david", "dave", "davey"],
+                "david": ["david", "dave", "davey"],
                 "dan": ["daniel", "dan", "danny"],
-                "bob": ["robert", "bob"],
-                "bill": ["william", "bill"],
-                "jim": ["james", "jim", "jimmy"],
-                "mike": ["michael", "mike"],
-                "tom": ["thomas", "tom"],
-                "chris": ["christopher", "chris"],
-                "steve": ["steven", "stephen", "steve"],
-                "rick": ["richard", "rick", "ricky"]
+                "daniel": ["daniel", "dan", "danny"],
+                "danny": ["daniel", "dan", "danny"],
+                "bob": ["robert", "bob", "bobby", "rob"],
+                "robert": ["robert", "bob", "bobby", "rob"],
+                "rob": ["robert", "bob", "bobby", "rob"],
+                "bill": ["william", "bill", "billy", "will"],
+                "william": ["william", "bill", "billy", "will"],
+                "will": ["william", "bill", "billy", "will"],
+                "jim": ["james", "jim", "jimmy", "jamie"],
+                "james": ["james", "jim", "jimmy", "jamie"],
+                "jimmy": ["james", "jim", "jimmy", "jamie"],
+                "mike": ["michael", "mike", "mikey", "mick"],
+                "michael": ["michael", "mike", "mikey", "mick"],
+                "mikey": ["michael", "mike", "mikey", "mick"],
+                "tom": ["thomas", "tom", "tommy"],
+                "thomas": ["thomas", "tom", "tommy"],
+                "tommy": ["thomas", "tom", "tommy"],
+                "chris": ["christopher", "chris", "christy"],
+                "christopher": ["christopher", "chris", "christy"],
+                "steve": ["steven", "stephen", "steve", "stevie"],
+                "steven": ["steven", "stephen", "steve", "stevie"],
+                "stephen": ["steven", "stephen", "steve", "stevie"],
+                "rick": ["richard", "rick", "ricky", "dick"],
+                "richard": ["richard", "rick", "ricky", "dick"],
+                "ricky": ["richard", "rick", "ricky", "dick"],
+                "john": ["john", "jon", "jonathan", "johnny"],
+                "jon": ["john", "jon", "jonathan", "johnny"],
+                "jonathan": ["john", "jon", "jonathan", "johnny"]
             ]
             
             let normalizedFirstName = firstName.lowercased()
-            var possibleNames = [normalizedFirstName]
+            var possibleNames = Set<String>()
+            possibleNames.insert(normalizedFirstName)
             
-            // Add nickname variations
-            for (nickname, variants) in nicknameMap {
+            // Find all variations for this first name
+            // Check if the name itself is a key
+            if let variants = nicknameMap[normalizedFirstName] {
+                possibleNames.formUnion(variants)
+            }
+            
+            // Also check if it's in any of the variant lists
+            for (key, variants) in nicknameMap {
                 if variants.contains(normalizedFirstName) {
-                    possibleNames.append(contentsOf: variants)
+                    possibleNames.formUnion(variants)
+                    possibleNames.insert(key) // Also add the key itself
                 }
             }
             
             // Try matching with any of the possible first name variations
-            if let match = players.first(where: { player in
-                let playerParts = player.name.lowercased().components(separatedBy: .whitespaces)
-                if let playerFirstName = playerParts.first {
-                    return possibleNames.contains(playerFirstName)
+            // If we have a last name, require it to match too
+            if nameParts.count >= 2 {
+                let lastName = nameParts.last!.lowercased()
+                if let match = players.first(where: { player in
+                    let playerNameLower = player.name.lowercased().trimmingCharacters(in: .whitespaces)
+                    let playerParts = playerNameLower.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                    guard let playerFirstName = playerParts.first, let playerLastName = playerParts.last else { return false }
+                    
+                    // First name must match (with nickname variations) - check both directions
+                    let firstNameMatches = possibleNames.contains(playerFirstName) || {
+                        // Also check if player's first name has variations that match
+                        var playerPossibleNames = Set<String>()
+                        playerPossibleNames.insert(playerFirstName)
+                        if let playerVariants = nicknameMap[playerFirstName] {
+                            playerPossibleNames.formUnion(playerVariants)
+                        }
+                        for (key, variants) in nicknameMap {
+                            if variants.contains(playerFirstName) {
+                                playerPossibleNames.formUnion(variants)
+                                playerPossibleNames.insert(key)
+                            }
+                        }
+                        return playerPossibleNames.contains(normalizedFirstName)
+                    }()
+                    // Last name must match
+                    let lastNameMatches = playerLastName == lastName
+                    
+                    return firstNameMatches && lastNameMatches
+                }) {
+                    return match
                 }
-                return false
-            }) {
-                return match
+            } else {
+                // Only first name provided - match on first name only
+                if let match = players.first(where: { player in
+                    let playerNameLower = player.name.lowercased().trimmingCharacters(in: .whitespaces)
+                    let playerParts = playerNameLower.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                    if let playerFirstName = playerParts.first {
+                        return possibleNames.contains(playerFirstName)
+                    }
+                    return false
+                }) {
+                    return match
+                }
             }
         }
         
-        // Try partial match on full name
-        if let partial = players.first(where: { $0.name.lowercased().contains(searchName) || searchName.contains($0.name.lowercased()) }) {
+        // Try partial match on full name - check if search name is contained in player name or vice versa
+        if let partial = players.first(where: { player in
+            let playerNameLower = player.name.lowercased().trimmingCharacters(in: .whitespaces)
+            return playerNameLower.contains(searchName) || searchName.contains(playerNameLower)
+        }) {
             return partial
+        }
+        
+        // Try word-by-word matching - if all words in search name appear in player name
+        let searchWords = nameParts.filter { $0.count > 2 } // Ignore very short words
+        if searchWords.count >= 2 {
+            if let match = players.first(where: { player in
+                let playerNameLower = player.name.lowercased().trimmingCharacters(in: .whitespaces)
+                let playerWords = playerNameLower.components(separatedBy: .whitespaces).filter { !$0.isEmpty && $0.count > 2 }
+                
+                // Check if all significant search words are found in player name
+                return searchWords.allSatisfy { searchWord in
+                    playerWords.contains { $0 == searchWord || $0.contains(searchWord) || searchWord.contains($0) }
+                }
+            }) {
+                return match
+            }
         }
         
         return nil
@@ -355,6 +535,10 @@ struct CalendarImportConfirmationView: View {
                             Text(matched.name)
                                 .foregroundColor(.secondary)
                         }
+                        // Automatically set the matched course immediately
+                        .onAppear {
+                            selectedCourse = matched
+                        }
                     } else {
                         Text("No course match found for: \(event.courseName)")
                             .foregroundColor(.orange)
@@ -373,18 +557,12 @@ struct CalendarImportConfirmationView: View {
                         HStack {
                             Text(eventPlayerName)
                             Spacer()
-                            if let matched = matchedPlayers.first(where: { player in
-                                let playerName = player.name.lowercased()
-                                let eventName = eventPlayerName.lowercased()
-                                return playerName.contains(eventName) || eventName.contains(playerName)
-                            }) {
+                            if let matched = findMatchedPlayer(for: eventPlayerName) {
                                 Text("→ \(matched.name)")
                                     .foregroundColor(.green)
                                     .font(.caption)
                                     .onAppear {
-                                        if !selectedPlayers.contains(matched.id) {
-                                            selectedPlayers.insert(matched.id)
-                                        }
+                                        selectedPlayers.insert(matched.id)
                                     }
                             } else {
                                 Text("No match")
@@ -451,16 +629,171 @@ struct CalendarImportConfirmationView: View {
                 .disabled(selectedCourse == nil || selectedPlayers.isEmpty)
             )
             .onAppear {
-                // Set matched course if available
+                // Set matched course if available - do this immediately
                 if let matched = matchedCourse {
                     selectedCourse = matched
                 }
+                
                 // Pre-select matched players
                 for player in matchedPlayers {
                     selectedPlayers.insert(player.id)
                 }
+                
+                // Also try to match any players that weren't automatically matched
+                for eventPlayerName in event.players {
+                    if let matched = findMatchedPlayer(for: eventPlayerName), !selectedPlayers.contains(matched.id) {
+                        selectedPlayers.insert(matched.id)
+                    }
+                }
+            }
+            .onChange(of: matchedCourse) { oldValue, newValue in
+                // Update selected course when matched course changes
+                if let matched = newValue, selectedCourse == nil {
+                    selectedCourse = matched
+                }
+            }
+            .onChange(of: matchedPlayers) { oldValue, newValue in
+                // Update selected players when matched players change
+                for player in newValue {
+                    selectedPlayers.insert(player.id)
+                }
             }
         }
+    }
+    
+    // Helper function to find matched player using the same logic as CalendarEventRow
+    func findMatchedPlayer(for eventPlayerName: String) -> Player? {
+        // First check if it's in the matchedPlayers array
+        if let matched = matchedPlayers.first(where: { player in
+            // Use the same matching logic
+            let searchName = eventPlayerName.lowercased().trimmingCharacters(in: .whitespaces)
+            let playerName = player.name.lowercased().trimmingCharacters(in: .whitespaces)
+            
+            // Exact match
+            if playerName == searchName {
+                return true
+            }
+            
+            // Check if names contain each other
+            if playerName.contains(searchName) || searchName.contains(playerName) {
+                return true
+            }
+            
+            // Check word-by-word
+            let searchParts = searchName.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            let playerParts = playerName.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            
+            if searchParts.count >= 2 && playerParts.count >= 2 {
+                // Check if last names match
+                if searchParts.last == playerParts.last {
+                    // Check first name with nickname variations
+                    let nicknameMap: [String: [String]] = [
+                        "dan": ["daniel", "dan", "danny"],
+                        "daniel": ["daniel", "dan", "danny"],
+                        "danny": ["daniel", "dan", "danny"],
+                        "dave": ["david", "dave", "davey"],
+                        "david": ["david", "dave", "davey"],
+                        "mike": ["michael", "mike", "mikey"],
+                        "michael": ["michael", "mike", "mikey"]
+                    ]
+                    
+                    let searchFirstName = searchParts.first!.lowercased()
+                    let playerFirstName = playerParts.first!.lowercased()
+                    
+                    var searchVariants = Set<String>([searchFirstName])
+                    if let variants = nicknameMap[searchFirstName] {
+                        searchVariants.formUnion(variants)
+                    }
+                    for (key, variants) in nicknameMap {
+                        if variants.contains(searchFirstName) {
+                            searchVariants.formUnion(variants)
+                            searchVariants.insert(key)
+                        }
+                    }
+                    
+                    return searchVariants.contains(playerFirstName)
+                }
+            }
+            
+            return false
+        }) {
+            return matched
+        }
+        
+        // If not in matchedPlayers, try to find it using the same logic
+        return findMatchingPlayerInList(eventPlayerName)
+    }
+    
+    func findMatchingPlayerInList(_ name: String) -> Player? {
+        let searchName = name.lowercased().trimmingCharacters(in: .whitespaces)
+        let nameParts = searchName.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        
+        // Exact match
+        if let exact = allPlayers.first(where: { $0.name.lowercased().trimmingCharacters(in: .whitespaces) == searchName }) {
+            return exact
+        }
+        
+        // Last name match
+        if nameParts.count >= 2 {
+            let lastName = nameParts.last!.lowercased()
+            if let match = allPlayers.first(where: { player in
+                let playerParts = player.name.lowercased().components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                return playerParts.last == lastName
+            }) {
+                return match
+            }
+        }
+        
+        // First name + last name with nicknames
+        if nameParts.count >= 2, let firstName = nameParts.first {
+            let lastName = nameParts.last!.lowercased()
+            let nicknameMap: [String: [String]] = [
+                "dan": ["daniel", "dan", "danny"],
+                "daniel": ["daniel", "dan", "danny"],
+                "danny": ["daniel", "dan", "danny"],
+                "dave": ["david", "dave", "davey"],
+                "david": ["david", "dave", "davey"],
+                "mike": ["michael", "mike", "mikey"],
+                "michael": ["michael", "mike", "mikey"]
+            ]
+            
+            let normalizedFirstName = firstName.lowercased()
+            var possibleNames = Set<String>([normalizedFirstName])
+            if let variants = nicknameMap[normalizedFirstName] {
+                possibleNames.formUnion(variants)
+            }
+            for (key, variants) in nicknameMap {
+                if variants.contains(normalizedFirstName) {
+                    possibleNames.formUnion(variants)
+                    possibleNames.insert(key)
+                }
+            }
+            
+            if let match = allPlayers.first(where: { player in
+                let playerParts = player.name.lowercased().components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                guard let playerFirstName = playerParts.first, let playerLastName = playerParts.last else { return false }
+                
+                let firstNameMatches = possibleNames.contains(playerFirstName) || {
+                    var playerPossibleNames = Set<String>([playerFirstName])
+                    if let playerVariants = nicknameMap[playerFirstName] {
+                        playerPossibleNames.formUnion(playerVariants)
+                    }
+                    for (key, variants) in nicknameMap {
+                        if variants.contains(playerFirstName) {
+                            playerPossibleNames.formUnion(variants)
+                            playerPossibleNames.insert(key)
+                        }
+                    }
+                    return playerPossibleNames.contains(normalizedFirstName)
+                }()
+                
+                return firstNameMatches && playerLastName == lastName
+            }) {
+                return match
+            }
+        }
+        
+        return nil
     }
 }
 
