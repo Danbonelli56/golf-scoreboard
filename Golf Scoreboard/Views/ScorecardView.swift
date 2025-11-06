@@ -10,7 +10,7 @@ import SwiftData
 
 struct ScorecardView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var games: [Game]
+    @Query private var allGames: [Game]
     @Query private var players: [Player]
     @Query private var courses: [GolfCourse]
     
@@ -19,11 +19,34 @@ struct ScorecardView: View {
     @State private var showingGameSetup = false
     @State private var inputText = ""
     @State private var listening = false
+    @State private var showingCompleteGameAlert = false
+    
+    // Filter out completed games and games from previous days
+    private var activeGames: [Game] {
+        allGames.filter { game in
+            // Exclude if explicitly marked as completed
+            if game.isCompleted {
+                return false
+            }
+            // Auto-archive games from previous days
+            if game.isFromPreviousDay {
+                // Mark as completed and save
+                game.isCompleted = true
+                try? modelContext.save()
+                return false
+            }
+            return true
+        }
+    }
+    
+    private var games: [Game] {
+        activeGames
+    }
     
     private var selectedGame: Game? {
         get {
             guard !selectedGameIDString.isEmpty, let id = UUID(uuidString: selectedGameIDString) else { return nil }
-            return games.first { $0.id == id }
+            return activeGames.first { $0.id == id }
         }
         set {
             selectedGameIDString = newValue?.id.uuidString ?? ""
@@ -52,28 +75,59 @@ struct ScorecardView: View {
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Menu {
-                        ForEach(games) { game in
-                            Menu(game.course?.name ?? "Game") {
-                                Button {
-                                    _selectedGameIDString.wrappedValue = game.id.uuidString
-                                } label: {
-                                    Label("Select", systemImage: "checkmark")
-                                }
-                                
-                                Divider()
-                                
-                                Button(role: .destructive) {
-                                    deleteGame(game)
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                    HStack {
+                        // Complete/Archive button (only show if game is selected and can be completed)
+                        if let game = selectedGame, game.isGameCompleted {
+                            Button {
+                                showingCompleteGameAlert = true
+                            } label: {
+                                Image(systemName: "checkmark.circle")
                             }
                         }
-                    } label: {
-                        Label("Games", systemImage: "list.bullet")
+                        
+                        Menu {
+                            ForEach(games) { game in
+                                Menu(game.course?.name ?? "Game") {
+                                    Button {
+                                        _selectedGameIDString.wrappedValue = game.id.uuidString
+                                    } label: {
+                                        Label("Select", systemImage: "checkmark")
+                                    }
+                                    
+                                    Divider()
+                                    
+                                    if game.isGameCompleted {
+                                        Button {
+                                            completeGame(game)
+                                        } label: {
+                                            Label("Move to History", systemImage: "archive")
+                                        }
+                                    }
+                                    
+                                    Divider()
+                                    
+                                    Button(role: .destructive) {
+                                        deleteGame(game)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label("Games", systemImage: "list.bullet")
+                        }
                     }
                 }
+            }
+            .alert("Complete Game", isPresented: $showingCompleteGameAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Move to History") {
+                    if let game = selectedGame {
+                        completeGame(game)
+                    }
+                }
+            } message: {
+                Text("This will move the game to history and remove it from the active scorecard.")
             }
             .sheet(isPresented: $showingGameSetup) {
                 GameSetupView(selectedGameIDString: $selectedGameIDString, games: games)
@@ -577,6 +631,15 @@ struct ScorecardView: View {
             }
         }
         return nil
+    }
+    
+    private func completeGame(_ game: Game) {
+        game.isCompleted = true
+        try? modelContext.save()
+        
+        if selectedGame?.id == game.id {
+            _selectedGameIDString.wrappedValue = ""
+        }
     }
     
     private func deleteGame(_ game: Game) {

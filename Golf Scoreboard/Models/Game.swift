@@ -18,6 +18,7 @@ final class Game {
     var date: Date = Date()
     var createdAt: Date?
     var selectedTeeColor: String? // Override tee color for this game
+    var isCompleted: Bool = false // Whether the game is completed and archived
     
     init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil) {
         self.id = UUID()
@@ -33,6 +34,29 @@ final class Game {
     var playersArray: [Player] { players ?? [] }
     var holesScoresArray: [HoleScore] { holesScores ?? [] }
     var shotsArray: [Shot] { shots ?? [] }
+    
+    // Check if game is completed (all 18 holes have scores for all players)
+    var isGameCompleted: Bool {
+        guard !playersArray.isEmpty else { return false }
+        
+        for holeNum in 1...18 {
+            guard let holeScore = holesScoresArray.first(where: { $0.holeNumber == holeNum }) else {
+                return false
+            }
+            for player in playersArray {
+                if holeScore.scores[player.id] == nil {
+                    return false
+                }
+            }
+        }
+        return true
+    }
+    
+    // Check if game is from a previous day
+    var isFromPreviousDay: Bool {
+        let calendar = Calendar.current
+        return !calendar.isDateInToday(date) && date < Date()
+    }
     
     // Computed property for effective tee color (selected or default from course)
     var effectiveTeeColor: String? {

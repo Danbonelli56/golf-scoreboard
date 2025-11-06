@@ -54,6 +54,18 @@ struct GameSetupView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section("Quick Import") {
+                    NavigationLink {
+                        CalendarImportView(selectedGameIDString: $selectedGameIDString)
+                    } label: {
+                        HStack {
+                            Image(systemName: "calendar")
+                                .foregroundColor(.blue)
+                            Text("Import from Calendar")
+                        }
+                    }
+                }
+                
                 Section("Course") {
                     if courses.isEmpty {
                         Text("No courses available. Add courses first.")
@@ -77,7 +89,7 @@ struct GameSetupView: View {
                 }
                 
                 // Tee selection section (only show when course is selected and has tees)
-                if let course = selectedCourse, !availableTeeColors.isEmpty {
+                if selectedCourse != nil, !availableTeeColors.isEmpty {
                     Section("Tee Selection") {
                         Picker("Tee Color", selection: $selectedTeeColor) {
                             Text("Default (Player Preference)").tag(nil as String?)

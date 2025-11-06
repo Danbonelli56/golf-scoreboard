@@ -16,20 +16,8 @@ struct GameHistoryView: View {
     
     var completedGames: [Game] {
         allGames.filter { game in
-            // A game is considered complete if all holes have scores for all players
-            guard !game.playersArray.isEmpty else { return false }
-            
-            for holeNum in 1...18 {
-                guard let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNum }) else {
-                    return false
-                }
-                for player in game.playersArray {
-                    if holeScore.scores[player.id] == nil {
-                        return false
-                    }
-                }
-            }
-            return true
+            // Show games that are explicitly marked as completed OR are from previous days
+            return game.isCompleted || game.isFromPreviousDay
         }
     }
     
