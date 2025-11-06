@@ -54,6 +54,17 @@ struct GameSetupView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section {
+                    NavigationLink("Import from Calendar") {
+                        CalendarImportView(selectedGameIDString: $selectedGameIDString, games: games)
+                    }
+                    .foregroundColor(.blue)
+                } header: {
+                    Text("Quick Import")
+                } footer: {
+                    Text("Search calendar for golf events in the next 2 days")
+                }
+                
                 Section("Course") {
                     if courses.isEmpty {
                         Text("No courses available. Add courses first.")
@@ -149,6 +160,424 @@ struct GameSetupView: View {
             }
         }
     }
+    
+    // Removed - using CalendarImportView instead
+    /*
+    private func loadCalendarEvents() async {
+        isLoadingCalendar = true
+        calendarError = nil
+        calendarStatusMessage = nil
+        calendarEventDate = nil
+        
+        print("📅 Starting calendar event loading...")
+        
+        // Check authorization status
+        calendarManager.checkAuthorizationStatus()
+        
+        // Request access if needed
+        if calendarManager.authorizationStatus == .notDetermined {
+            print("📅 Requesting calendar access...")
+            do {
+                try await calendarManager.requestAccess()
+                print("📅 Calendar access request completed")
+            } catch {
+                print("❌ Failed to request calendar access: \(error)")
+                await MainActor.run {
+                    calendarError = "Failed to request calendar access: \(error.localizedDescription)"
+                    isLoadingCalendar = false
+                }
+                return
+            }
+        }
+        
+        // Check authorization status (handle iOS 17+ separately)
+        if #available(iOS 17.0, *) {
+            // For iOS 17+, check actual access status
+            calendarManager.checkAuthorizationStatus()
+            if calendarManager.authorizationStatus != .authorized {
+                print("❌ Calendar access not authorized (iOS 17+)")
+                await MainActor.run {
+                    calendarError = "Calendar access is required to import events"
+                    isLoadingCalendar = false
+                }
+                return
+            }
+        } else {
+            // For iOS 16 and earlier
+            if calendarManager.authorizationStatus != .authorized {
+                print("❌ Calendar access not authorized")
+                await MainActor.run {
+                    calendarError = "Calendar access is required to import events"
+                    isLoadingCalendar = false
+                }
+                return
+            }
+        }
+        
+        print("✅ Calendar access granted, fetching events...")
+        
+        // Fetch events for today and next few days (to catch upcoming games)
+        do {
+            let calendar = Calendar.current
+            let today = Date()
+            var golfEvents: [GolfEvent] = []
+            
+            // Check today and next 7 days
+            for dayOffset in 0..<7 {
+                let checkDate = calendar.date(byAdding: .day, value: dayOffset, to: today) ?? today
+                let dayName = dayOffset == 0 ? "today" : (dayOffset == 1 ? "tomorrow" : "in \(dayOffset) days")
+                
+                print("📅 Checking events for \(dayName) (\(checkDate))")
+                let events = try await calendarManager.fetchGolfEvents(for: checkDate)
+                
+                if !events.isEmpty {
+                    print("📅 Found \(events.count) golf event(s) for \(dayName)")
+                    golfEvents.append(contentsOf: events)
+                    
+                    // If we found events for today or tomorrow, prefer those
+                    // Otherwise, use the earliest found event
+                    if dayOffset <= 1 {
+                        break // Use today or tomorrow's events
+                    }
+                }
+            }
+            
+            print("📅 Total found: \(golfEvents.count) golf event(s)")
+            
+            if golfEvents.isEmpty {
+                print("⚠️ No golf events found in the next 7 days")
+                await MainActor.run {
+                    calendarStatusMessage = "No golf events found in the next 7 days"
+                    isLoadingCalendar = false
+                }
+                return
+            }
+            
+            // Sort events by date and use the earliest one
+            let sortedEvents = golfEvents.sorted { $0.eventDate < $1.eventDate }
+            if let firstEvent = sortedEvents.first {
+                let eventDateFormatter = DateFormatter()
+                eventDateFormatter.dateStyle = .medium
+                eventDateFormatter.timeStyle = .none
+                let eventDateString = eventDateFormatter.string(from: firstEvent.eventDate)
+                
+                print("📅 Processing event for \(eventDateString): course='\(firstEvent.course)', players=\(firstEvent.players)")
+                
+                // Store the calendar event date
+                await MainActor.run {
+                    calendarEventDate = firstEvent.eventDate
+                }
+                
+                // Match course
+                var matchedCourse: GolfCourse? = nil
+                if let course = matchCourse(from: firstEvent.course) {
+                    print("✅ Matched course: \(course.name)")
+                    matchedCourse = course
+                    await MainActor.run {
+                        selectedCourse = course
+                        // Initialize tee selection
+                        if selectedTeeColor == nil && !availableTeeColors.isEmpty {
+                            selectedTeeColor = defaultTeeColor
+                        }
+                    }
+                } else {
+                    print("⚠️ Could not match course: '\(firstEvent.course)'")
+                    await MainActor.run {
+                        calendarStatusMessage = "Found event but couldn't match course: \(firstEvent.course)"
+                    }
+                }
+                
+                // Match players
+                let matchedPlayers = matchPlayers(from: firstEvent.players)
+                print("📅 Matched \(matchedPlayers.count) out of \(firstEvent.players.count) players")
+                
+                if !matchedPlayers.isEmpty {
+                    print("✅ Matched players: \(matchedPlayers.map { $0.name })")
+                    await MainActor.run {
+                        selectedPlayers = Set(matchedPlayers.map { $0.id })
+                    }
+                } else {
+                    print("⚠️ Could not match any players from: \(firstEvent.players)")
+                    if calendarStatusMessage == nil {
+                        await MainActor.run {
+                            calendarStatusMessage = "Found event but couldn't match players"
+                        }
+                    }
+                }
+                
+                // Update status message if we successfully matched something
+                if matchedCourse != nil || !matchedPlayers.isEmpty {
+                    await MainActor.run {
+                        calendarStatusMessage = nil // Clear status if we successfully imported
+                    }
+                }
+            }
+        } catch {
+            print("❌ Error fetching calendar events: \(error)")
+            await MainActor.run {
+                calendarError = error.localizedDescription
+            }
+        }
+        
+        await MainActor.run {
+            isLoadingCalendar = false
+        }
+        print("📅 Calendar event loading completed")
+    }
+    
+    private func matchCourse(from courseName: String) -> GolfCourse? {
+        let lowerCourseName = courseName.lowercased()
+        
+        // Try exact match first
+        if let exactMatch = courses.first(where: { $0.name.lowercased() == lowerCourseName }) {
+            return exactMatch
+        }
+        
+        // Try substring match (course name contains event name or vice versa)
+        for course in courses {
+            let courseNameLower = course.name.lowercased()
+            
+            if courseNameLower.contains(lowerCourseName) || lowerCourseName.contains(courseNameLower) {
+                return course
+            }
+            
+            // Try matching on key words (excluding common words)
+            let courseWords = courseNameLower.components(separatedBy: " ").filter {
+                !["the", "at", "club", "golf", "and"].contains($0) && $0.count > 2
+            }
+            let searchWords = lowerCourseName.components(separatedBy: " ").filter {
+                !$0.isEmpty && $0.count > 2
+            }
+            
+            // Check if all search words are found in course words
+            var allWordsMatched = true
+            for searchWord in searchWords {
+                var wordFound = false
+                for courseWord in courseWords {
+                    if courseWord == searchWord || courseWord.contains(searchWord) || searchWord.contains(courseWord) {
+                        wordFound = true
+                        break
+                    }
+                }
+                if !wordFound {
+                    allWordsMatched = false
+                    break
+                }
+            }
+            
+            if allWordsMatched && !searchWords.isEmpty {
+                return course
+            }
+        }
+        
+        return nil
+    }
+    
+    private func matchPlayers(from playerNames: [String]) -> [Player] {
+        var matchedPlayers: [Player] = []
+        
+        // Common nickname mappings
+        let nicknameMap: [String: [String]] = [
+            "daniel": ["dan", "danny", "daniel"],
+            "dave": ["david", "dave", "davey"],
+            "mike": ["michael", "mike", "mikey"],
+            "chris": ["christopher", "chris", "christian"],
+            "bob": ["robert", "bob", "rob", "robby"],
+            "bill": ["william", "bill", "billy", "will"],
+            "jim": ["james", "jim", "jimmy"],
+            "tom": ["thomas", "tom", "tommy"],
+            "rich": ["richard", "rich", "rick", "dick"],
+            "joe": ["joseph", "joe", "joey"],
+            "ed": ["edward", "ed", "eddie", "ted"],
+            "john": ["john", "jon", "johnny"],
+            "steve": ["steven", "stephen", "steve", "stevie"],
+            "matt": ["matthew", "matt", "matty"],
+            "pat": ["patrick", "pat", "patty"],
+        ]
+        
+        for name in playerNames {
+            let nameLower = name.lowercased().trimmingCharacters(in: .whitespaces)
+            let nameParts = nameLower.components(separatedBy: " ").filter { !$0.isEmpty }
+            let calendarFirstName = nameParts.first ?? ""
+            let calendarLastName = nameParts.count > 1 ? nameParts.last! : ""
+            
+            print("  🔍 Trying to match: '\(nameLower)' (first: '\(calendarFirstName)', last: '\(calendarLastName)')")
+            
+            // Try to match player by first name, last name, or full name
+            for player in players {
+                let playerNameLower = player.name.lowercased()
+                let playerNameParts = playerNameLower.components(separatedBy: " ").filter { !$0.isEmpty }
+                let playerFirstName = playerNameParts.first ?? playerNameLower
+                let playerLastName = playerNameParts.count > 1 ? playerNameParts.last! : ""
+                
+                // Check exact match
+                if playerNameLower == nameLower {
+                    print("    ✅ Exact match: '\(player.name)'")
+                    if !matchedPlayers.contains(where: { $0.id == player.id }) {
+                        matchedPlayers.append(player)
+                        break
+                    }
+                }
+                
+                // Check if last names match (with first name variations)
+                if !calendarLastName.isEmpty && !playerLastName.isEmpty {
+                    // Try exact last name match first
+                    if calendarLastName == playerLastName {
+                        // Last names match, check if first names match or are nicknames
+                        if calendarFirstName == playerFirstName {
+                            print("    ✅ Last name + first name match: '\(player.name)'")
+                            if !matchedPlayers.contains(where: { $0.id == player.id }) {
+                                matchedPlayers.append(player)
+                                break
+                            }
+                        } else {
+                            // Check nickname variations
+                            var matched = false
+                            
+                            // Check if calendar first name is a nickname of player first name
+                            if let nicknames = nicknameMap[playerFirstName] {
+                                if nicknames.contains(calendarFirstName) {
+                                    print("    ✅ Last name + nickname match: '\(calendarFirstName)' -> '\(player.name)'")
+                                    matched = true
+                                }
+                            }
+                            
+                            // Check if player first name is a nickname of calendar first name
+                            if let calendarNicknames = nicknameMap[calendarFirstName] {
+                                if calendarNicknames.contains(playerFirstName) {
+                                    print("    ✅ Last name + reverse nickname match: '\(player.name)' -> '\(calendarFirstName)'")
+                                    matched = true
+                                }
+                            }
+                            
+                            if matched && !matchedPlayers.contains(where: { $0.id == player.id }) {
+                                matchedPlayers.append(player)
+                                break
+                            }
+                        }
+                    } else {
+                        // Try fuzzy last name matching for common spelling variations
+                        // Check if last names are similar (e.g., "Schultz" vs "Shultz")
+                        if areNamesSimilar(calendarLastName, playerLastName) {
+                            // Last names are similar, check first names
+                            if calendarFirstName == playerFirstName {
+                                print("    ✅ Similar last name + first name match: '\(player.name)'")
+                                if !matchedPlayers.contains(where: { $0.id == player.id }) {
+                                    matchedPlayers.append(player)
+                                    break
+                                }
+                            } else {
+                                // Check nickname variations with similar last names
+                                var matched = false
+                                
+                                if let nicknames = nicknameMap[playerFirstName] {
+                                    if nicknames.contains(calendarFirstName) {
+                                        print("    ✅ Similar last name + nickname match: '\(calendarFirstName)' -> '\(player.name)'")
+                                        matched = true
+                                    }
+                                }
+                                
+                                if let calendarNicknames = nicknameMap[calendarFirstName] {
+                                    if calendarNicknames.contains(playerFirstName) {
+                                        print("    ✅ Similar last name + reverse nickname match: '\(player.name)' -> '\(calendarFirstName)'")
+                                        matched = true
+                                    }
+                                }
+                                
+                                if matched && !matchedPlayers.contains(where: { $0.id == player.id }) {
+                                    matchedPlayers.append(player)
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Check first name only (if no last name in calendar)
+                if calendarLastName.isEmpty && calendarFirstName == playerFirstName {
+                    print("    ✅ First name match: '\(player.name)'")
+                    if !matchedPlayers.contains(where: { $0.id == player.id }) {
+                        matchedPlayers.append(player)
+                        break
+                    }
+                }
+                
+                // Check last name only
+                if !calendarLastName.isEmpty && calendarLastName == playerLastName {
+                    // If last name matches and calendar has both names, prefer full match
+                    // But if calendar only has last name, this is a match
+                    if calendarFirstName.isEmpty {
+                        print("    ✅ Last name only match: '\(player.name)'")
+                        if !matchedPlayers.contains(where: { $0.id == player.id }) {
+                            matchedPlayers.append(player)
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        
+        return matchedPlayers
+    }
+    
+    /// Checks if two names are similar (handles common spelling variations)
+    private func areNamesSimilar(_ name1: String, _ name2: String) -> Bool {
+        let n1 = name1.lowercased()
+        let n2 = name2.lowercased()
+        
+        // Exact match
+        if n1 == n2 {
+            return true
+        }
+        
+        // Common spelling variations
+        let variations: [(String, String)] = [
+            ("schultz", "shultz"),
+            ("smith", "smyth"),
+            ("johnson", "johansen"),
+            ("brown", "braun"),
+            ("white", "whyte"),
+            ("miller", "müller"),
+        ]
+        
+        for (var1, var2) in variations {
+            if (n1 == var1 && n2 == var2) || (n1 == var2 && n2 == var1) {
+                return true
+            }
+        }
+        
+        // Check if names are very similar (one character difference, etc.)
+        // Simple Levenshtein-like check for single character differences
+        if abs(n1.count - n2.count) <= 1 {
+            // Check if one string contains most of the other
+            let longer = n1.count > n2.count ? n1 : n2
+            let shorter = n1.count > n2.count ? n2 : n1
+            
+            // If the longer name starts with the shorter name, they're likely the same
+            if longer.hasPrefix(shorter) || shorter.hasPrefix(longer) {
+                return true
+            }
+            
+            // Check for single character substitutions (common typos)
+            var differences = 0
+            let minLength = min(n1.count, n2.count)
+            for i in 0..<minLength {
+                let idx1 = n1.index(n1.startIndex, offsetBy: i)
+                let idx2 = n2.index(n2.startIndex, offsetBy: i)
+                if n1[idx1] != n2[idx2] {
+                    differences += 1
+                }
+            }
+            
+            // Allow one character difference
+            if differences <= 1 {
+                return true
+            }
+        }
+        
+        return false
+    }
+    */
     
     private func startGame() {
         let selectedPlayersArray = players.filter { selectedPlayers.contains($0.id) }

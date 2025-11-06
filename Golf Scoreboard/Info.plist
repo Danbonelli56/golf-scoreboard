@@ -2,10 +2,31 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+<<<<<<< HEAD
     <key>CFBundleShortVersionString</key>
     <string>2.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>42</string>
+=======
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.0.1</string>
+	<key>CFBundleVersion</key>
+	<string>42</string>
+>>>>>>> 700f94f1d213d8bfb6d37cd8cb649b2ff5cdbbd5
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
@@ -16,5 +37,7 @@
 	<string>This app needs access to the microphone to allow you to input scores by voice.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>This app needs access to your contacts to import player information when adding players.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app needs access to your calendar to find golf events created by Schedule Golf app.</string>
 </dict>
 </plist>
