@@ -489,20 +489,34 @@ struct ShotTrackingView: View {
             }
         }
         
-        // If this is shot #1 and no distance provided, use hole length
+        // If this is shot #1, default to scorecard distance (but allow verbal/text override)
         var shotDistance = pending.distance
-        if shotNum == 1 && shotDistance == nil {
-            // Get hole distance from course
+        if shotNum == 1 {
+            // Get hole distance from course using the game's selected tee color
             if let course = game.course,
                let holes = course.holes,
                let hole = holes.first(where: { $0.holeNumber == holeNum }),
                let teeDistances = hole.teeDistances {
-                if let white = teeDistances.first(where: { $0.teeColor.lowercased() == "white" }) {
-                    shotDistance = white.distanceYards
+                // Use the game's effective tee color (selected or default)
+                let teeColor = game.effectiveTeeColor
+                var scorecardDistance: Int? = nil
+                
+                if let teeColor = teeColor,
+                   let matchingTee = teeDistances.first(where: { $0.teeColor == teeColor }) {
+                    scorecardDistance = matchingTee.distanceYards
+                } else if let white = teeDistances.first(where: { $0.teeColor.lowercased() == "white" }) {
+                    scorecardDistance = white.distanceYards
                 } else if let first = teeDistances.first {
-                    shotDistance = first.distanceYards
+                    scorecardDistance = first.distanceYards
                 }
-                print("📍 Using hole distance: \(shotDistance!) yards")
+                
+                // If user provided a distance via voice/text, use that; otherwise use scorecard default
+                if let provided = shotDistance {
+                    print("📍 Using provided distance: \(provided) yards (scorecard default was \(scorecardDistance ?? 0) yards)")
+                } else if let scorecard = scorecardDistance {
+                    shotDistance = scorecard
+                    print("📍 Using scorecard distance (default): \(shotDistance!) yards for \(teeColor ?? "default") tees")
+                }
             }
         }
         
@@ -801,6 +815,8 @@ struct GameShotsView: View {
 
 struct ShotGroupCard: View {
     @Environment(\.modelContext) private var modelContext
+    @Query private var games: [Game]
+    @Query private var allShotsQuery: [Shot]
     let player: Player
     let holeNumber: Int
     let allShots: [Shot]
@@ -855,6 +871,19 @@ struct ShotGroupCard: View {
                     .padding(.vertical, 2)
                     .background(Color.green.opacity(0.15))
                     .cornerRadius(8)
+                    .onTapGesture {
+                        // Remove "Holed" status by removing the score
+                        if let game = games.first(where: { $0.id == currentGameID }),
+                           let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }) {
+                            // Remove the player's score from the hole
+                            if let playerScore = holeScore.playerScores?.first(where: { $0.player?.id == player.id }) {
+                                modelContext.delete(playerScore)
+                                try? modelContext.save()
+                                NotificationCenter.default.post(name: .shotsUpdated, object: nil)
+                                print("✅ Removed 'Holed' status for \(player.name) on hole \(holeNumber)")
+                            }
+                        }
+                    }
                 }
             }
             
@@ -865,9 +894,39 @@ struct ShotGroupCard: View {
             } else {
                 ForEach(playerShots, id: \.id) { shot in
                     ShotRow(shot: shot) {
-                        // Delete callback
+                        // Delete callback - recalculate distances after deletion
+                        let deletedShotNumber = shot.shotNumber
+                        
                         modelContext.delete(shot)
                         try? modelContext.save()
+                        
+                        // Recalculate distances for remaining shots after deletion
+                        if let game = games.first(where: { $0.id == currentGameID }) {
+                            // Get remaining shots after deletion
+                            let remainingShots = allShotsQuery.filter { s in
+                                guard let shotGameID = s.game?.id, s.id != shot.id else { return false }
+                                return shotGameID == currentGameID && s.player?.id == player.id && s.holeNumber == holeNumber
+                            }.sorted { $0.shotNumber < $1.shotNumber }
+                            
+                            // Recalculate distanceTraveled for all remaining shots
+                            for (index, remainingShot) in remainingShots.enumerated() {
+                                if index < remainingShots.count - 1 {
+                                    let nextShot = remainingShots[index + 1]
+                                    if let currentDistance = remainingShot.distanceToHole, let nextDistance = nextShot.distanceToHole {
+                                        let traveled = currentDistance - nextDistance
+                                        remainingShot.distanceTraveled = traveled
+                                        print("📏 Recalculated Shot #\(remainingShot.shotNumber): \(currentDistance)yds - \(nextDistance)yds = \(traveled)yds")
+                                    }
+                                } else {
+                                    // Last shot - reset distanceTraveled since there's no next shot
+                                    remainingShot.distanceTraveled = nil
+                                    print("📏 Reset distanceTraveled for Shot #\(remainingShot.shotNumber) (now last shot)")
+                                }
+                            }
+                            
+                            try? modelContext.save()
+                            NotificationCenter.default.post(name: .shotsUpdated, object: nil)
+                        }
                     }
                 }
                 
