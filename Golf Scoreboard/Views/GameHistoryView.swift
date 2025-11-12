@@ -52,9 +52,18 @@ struct GameHistoryView: View {
                     }
                     .padding()
                 } else {
-                    List(completedGames) { game in
-                        NavigationLink(destination: GameDetailView(game: game)) {
-                            GameHistoryRow(game: game)
+                    List {
+                        ForEach(completedGames) { game in
+                            NavigationLink(destination: GameDetailView(game: game)) {
+                                GameHistoryRow(game: game)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    deleteGame(game)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                 }
@@ -80,11 +89,40 @@ struct GameHistoryView: View {
         }
     }
     
+    private func deleteGame(_ game: Game) {
+        // Clear selection if this was the selected game
+        if let selectedID = UUID(uuidString: selectedGameIDString), selectedID == game.id {
+            _selectedGameIDString.wrappedValue = ""
+        }
+        
+        // Delete all related shots
+        if let shots = game.shots {
+            for shot in shots {
+                modelContext.delete(shot)
+            }
+        }
+        
+        // Delete all related hole scores (which will cascade delete player scores)
+        if let holeScores = game.holesScores {
+            for holeScore in holeScores {
+                modelContext.delete(holeScore)
+            }
+        }
+        
+        // Delete the game itself
+        modelContext.delete(game)
+        
+        // Save changes
+        try? modelContext.save()
+        
+        // Post notification to update statistics
+        NotificationCenter.default.post(name: .shotsUpdated, object: nil)
+    }
+    
     private func deleteAllCompletedGames() {
         for game in completedGames {
-            modelContext.delete(game)
+            deleteGame(game)
         }
-        try? modelContext.save()
     }
 }
 

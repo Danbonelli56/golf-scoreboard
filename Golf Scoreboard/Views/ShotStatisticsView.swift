@@ -153,27 +153,61 @@ struct ClubStatsRow: View {
             
             // Special display for Putter
             if stats.isPutter {
-                HStack {
-                    if stats.averageFeet > 0 {
-                        Text("Avg:")
-                        Text(String(format: "%.1f ft", stats.averageFeet))
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Per Round:")
+                        Text(String(format: "%.1f putts", stats.puttsPerRound))
                             .foregroundColor(.blue)
                             .fontWeight(.semibold)
                         
-                        Text("|")
-                            .foregroundColor(.secondary)
+                        Spacer()
                     }
                     
-                    Text("Per Hole:")
-                    Text(String(format: "%.2f putts", stats.puttsPerHole))
-                        .foregroundColor(.green)
-                        .fontWeight(.semibold)
+                    HStack {
+                        Text("Per Hole:")
+                        Text(String(format: "%.2f putts", stats.puttsPerHole))
+                            .foregroundColor(.green)
+                            .fontWeight(.semibold)
+                        
+                        Spacer()
+                        
+                        Text("\(stats.totalPutts) total")
+                            .foregroundColor(.secondary)
+                            .font(.caption)
+                    }
                     
-                    Spacer()
-                    
-                    Text("\(stats.totalPutts) putts")
-                        .foregroundColor(.secondary)
-                        .font(.caption)
+                    // Direction and distance indicators for putts
+                    if !stats.shotsByResult.isEmpty || stats.longPutts > 0 || stats.shortPutts > 0 {
+                        HStack(spacing: 12) {
+                            if let rightCount = stats.shotsByResult["Right"], rightCount > 0 {
+                                Label("\(rightCount)", systemImage: "arrow.right")
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
+                            if let leftCount = stats.shotsByResult["Left"], leftCount > 0 {
+                                Label("\(leftCount)", systemImage: "arrow.left")
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                            if let straightCount = stats.shotsByResult["Straight"], straightCount > 0 {
+                                Label("\(straightCount)", systemImage: "arrow.up")
+                                    .font(.caption)
+                                    .foregroundColor(.blue)
+                            }
+                            if stats.longPutts > 0 {
+                                Label("\(stats.longPutts)", systemImage: "arrow.up.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.purple)
+                            }
+                            if stats.shortPutts > 0 {
+                                Label("\(stats.shortPutts)", systemImage: "arrow.down.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.yellow)
+                            }
+                            
+                            Spacer()
+                        }
+                    }
                 }
                 .font(.caption)
             } else if stats.averageDistance > 0 {

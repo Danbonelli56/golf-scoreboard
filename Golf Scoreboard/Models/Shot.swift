@@ -33,10 +33,12 @@ final class Shot {
     var distanceTraveled: Int? // in yards (how far the shot actually traveled)
     var isPenalty: Bool = false // true if this shot resulted in a penalty (hazard, OB, etc.)
     var isRetaking: Bool = false // true if retaking from tee (vs taking a drop)
+    var isLong: Bool = false // true if shot went long (past target)
+    var isShort: Bool = false // true if shot came short (didn't reach target)
     
     init(player: Player? = nil, holeNumber: Int, shotNumber: Int, 
          distanceToHole: Int? = nil, originalDistanceFeet: Int? = nil, club: String? = nil, 
-         result: ShotResult = .straight, isPutt: Bool = false, distanceTraveled: Int? = nil, isPenalty: Bool = false, isRetaking: Bool = false) {
+         result: ShotResult = .straight, isPutt: Bool = false, distanceTraveled: Int? = nil, isPenalty: Bool = false, isRetaking: Bool = false, isLong: Bool = false, isShort: Bool = false) {
         self.player = player
         self.holeNumber = holeNumber
         self.shotNumber = shotNumber
@@ -48,6 +50,8 @@ final class Shot {
         self.distanceTraveled = distanceTraveled
         self.isPenalty = isPenalty
         self.isRetaking = isRetaking
+        self.isLong = isLong
+        self.isShort = isShort
         self.createdAt = Date()
     }
     

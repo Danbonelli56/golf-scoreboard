@@ -144,7 +144,9 @@ struct AddShotView: View {
             isPutt: isPutt,
             distanceTraveled: nil,
             isPenalty: false,
-            isRetaking: false
+            isRetaking: false,
+            isLong: false,
+            isShort: false
         )
         
         // Associate the shot with the current game

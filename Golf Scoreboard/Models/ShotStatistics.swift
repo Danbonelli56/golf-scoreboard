@@ -20,8 +20,11 @@ struct ClubStatistics {
     var isPutter: Bool = false
     var totalPutts: Int = 0
     var uniqueHoles: Set<Int> = []
+    var uniqueGames: Set<UUID> = [] // Track games for putts per round calculation
     var feetDistances: [Int] = [] // Feet for putts
     var averageFeet: Double = 0.0
+    var longPutts: Int = 0 // Count of putts that went long
+    var shortPutts: Int = 0 // Count of putts that came short
     
     var totalShots: Int {
         shotsByResult.values.reduce(0, +)
@@ -29,6 +32,10 @@ struct ClubStatistics {
     
     var puttsPerHole: Double {
         uniqueHoles.isEmpty ? 0.0 : Double(totalPutts) / Double(uniqueHoles.count)
+    }
+    
+    var puttsPerRound: Double {
+        uniqueGames.isEmpty ? 0.0 : Double(totalPutts) / Double(uniqueGames.count)
     }
     
     init(club: String) {
@@ -53,15 +60,24 @@ struct ClubStatistics {
         }
     }
     
-    mutating func addPutt(holeNumber: Int, feet: Int?) {
+    mutating func addPutt(holeNumber: Int, gameID: UUID?, feet: Int?, isLong: Bool = false, isShort: Bool = false) {
         totalPutts += 1
         uniqueHoles.insert(holeNumber)
+        if let gameID = gameID {
+            uniqueGames.insert(gameID)
+        }
         if let feet = feet, feet > 0 {
             feetDistances.append(feet)
             let count = feetDistances.count
             if count > 0 {
                 averageFeet = Double(feetDistances.reduce(0, +)) / Double(count)
             }
+        }
+        if isLong {
+            longPutts += 1
+        }
+        if isShort {
+            shortPutts += 1
         }
     }
     
@@ -94,7 +110,7 @@ class ShotStatistics {
             
             // Handle putts differently
             if shot.isPutt && shot.club?.lowercased() == "putter" {
-                stats[club]?.addPutt(holeNumber: shot.holeNumber, feet: shot.originalDistanceFeet)
+                stats[club]?.addPutt(holeNumber: shot.holeNumber, gameID: shot.game?.id, feet: shot.originalDistanceFeet, isLong: shot.isLong, isShort: shot.isShort)
             } else {
                 // Add distance if available for non-putts
                 if let distance = shot.distanceTraveled, distance > 0 {

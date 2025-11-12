@@ -650,7 +650,9 @@ struct ShotTrackingView: View {
             isPutt: pending.isPutt,
             distanceTraveled: nil, // Will be calculated after next shot
             isPenalty: pending.isPenalty,
-            isRetaking: pending.isRetaking
+            isRetaking: pending.isRetaking,
+            isLong: pending.isLong,
+            isShort: pending.isShort
         )
         
         newShot.game = game
