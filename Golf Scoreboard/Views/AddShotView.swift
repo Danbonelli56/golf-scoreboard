@@ -146,7 +146,8 @@ struct AddShotView: View {
             isPenalty: false,
             isRetaking: false,
             isLong: false,
-            isShort: false
+            isShort: false,
+            isInBunker: false
         )
         
         // Associate the shot with the current game

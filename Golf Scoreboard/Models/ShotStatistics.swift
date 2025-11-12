@@ -137,5 +137,30 @@ class ShotStatistics {
         
         return (totalShots, averageDistance, totalDistance)
     }
+    
+    // Calculate bunker statistics for a player
+    static func getBunkerStats(for player: Player, shots: [Shot]) -> (totalBunkerShots: Int, averageDistance: Double, shotsPerRound: Double, uniqueGames: Set<UUID>) {
+        let bunkerShots = shots.filter { 
+            $0.player?.id == player.id && 
+            $0.isInBunker && 
+            !$0.isPutt
+        }
+        
+        let totalBunkerShots = bunkerShots.count
+        let distances = bunkerShots.compactMap { $0.distanceTraveled }.filter { $0 > 0 }
+        let averageDistance = distances.isEmpty ? 0.0 : Double(distances.reduce(0, +)) / Double(distances.count)
+        
+        // Track unique games for per-round calculation
+        var uniqueGames: Set<UUID> = []
+        for shot in bunkerShots {
+            if let gameID = shot.game?.id {
+                uniqueGames.insert(gameID)
+            }
+        }
+        
+        let shotsPerRound = uniqueGames.isEmpty ? 0.0 : Double(totalBunkerShots) / Double(uniqueGames.count)
+        
+        return (totalBunkerShots, averageDistance, shotsPerRound, uniqueGames)
+    }
 }
 

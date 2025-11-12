@@ -37,6 +37,7 @@ struct ShotTrackingView: View {
         var isShort: Bool = false
         var isPenalty: Bool = false
         var isRetaking: Bool = false // true if retaking from tee (vs taking a drop)
+        var isInBunker: Bool = false // true if shot landed in a bunker/sand trap
         
         var hasEssentialInfo: Bool { player != nil && (club != nil || result != nil) }
     }
@@ -402,9 +403,6 @@ struct ShotTrackingView: View {
         } else if lowerText.contains("hazard") || lowerText.contains("water") {
             result = .hazard
             hasExplicitResult = true
-        } else if lowerText.contains("trap") || lowerText.contains("sand") || lowerText.contains("bunker") {
-            result = .trap
-            hasExplicitResult = true
         } else if lowerText.contains("fairway") || lowerText.contains("rough") {
             // Fairway/rough generally means straight
             result = .straight
@@ -418,6 +416,9 @@ struct ShotTrackingView: View {
         // Putt modifiers
         let isLong = lowerText.contains("long") || lowerText.contains("over the pin") || lowerText.contains("over the green") || lowerText.contains("back of the green")
         let isShort = lowerText.contains("short") || lowerText.contains("short of the pin") || lowerText.contains("short of the green")
+        
+        // Detect bunker/sand trap (treat as fairway shot but mark as in bunker)
+        let isInBunker = lowerText.contains("bunker") || lowerText.contains("sandtrap") || lowerText.contains("sand trap")
         
         // Detect penalties and retaking
         let isPenalty = result == .outOfBounds || result == .hazard
@@ -443,6 +444,7 @@ struct ShotTrackingView: View {
         if isShort { print("⛳ Detected SHORT putt modifier") }
         if isPutt { print("⛳ Detected PUTT") }
         if isPenalty { print("⛳ Detected PENALTY shot") }
+        if isInBunker { print("⛳ Detected BUNKER shot") }
         
         // If we detected a putt, default to Putter
         if isPutt && club == nil {
@@ -478,6 +480,9 @@ struct ShotTrackingView: View {
         // Note: isPenalty is NOT set here - it's set in savePendingShot based on the previous shot
         if isRetaking {
             shot.isRetaking = true
+        }
+        if isInBunker {
+            shot.isInBunker = true
         }
         if holeNum != currentHole {
             shot.holeNumber = holeNum
@@ -652,7 +657,8 @@ struct ShotTrackingView: View {
             isPenalty: pending.isPenalty,
             isRetaking: pending.isRetaking,
             isLong: pending.isLong,
-            isShort: pending.isShort
+            isShort: pending.isShort,
+            isInBunker: pending.isInBunker
         )
         
         newShot.game = game

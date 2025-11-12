@@ -54,6 +54,19 @@ struct AddCourseView: View {
     }
     
     private func createCourse() {
+        // Check if course with this name already exists
+        let descriptor = FetchDescriptor<GolfCourse>(
+            predicate: #Predicate<GolfCourse> { course in
+                course.name == courseName
+            }
+        )
+        if (try? modelContext.fetch(descriptor).first) != nil {
+            print("⚠️ Course '\(courseName)' already exists")
+            // Don't create duplicate, just dismiss
+            dismiss()
+            return
+        }
+        
         let course = GolfCourse(name: courseName, slope: slope, rating: rating)
         
         // Create default 18 holes with standard pars

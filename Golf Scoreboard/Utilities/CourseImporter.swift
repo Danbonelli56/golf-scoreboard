@@ -11,6 +11,16 @@ import SwiftData
 class CourseImporter {
     
     static func createAmeliaRiverClub(context: ModelContext) -> GolfCourse {
+        // Check if course already exists
+        let descriptor = FetchDescriptor<GolfCourse>(
+            predicate: #Predicate<GolfCourse> { course in
+                course.name == "The Amelia River Club"
+            }
+        )
+        if let existing = try? context.fetch(descriptor).first {
+            return existing
+        }
+        
         let course = GolfCourse(
             name: "The Amelia River Club",
             location: "Amelia Island, FL",
@@ -82,6 +92,16 @@ class CourseImporter {
     }
     
     static func createNorthHamptonGolfClub(context: ModelContext) -> GolfCourse {
+        // Check if course already exists
+        let descriptor = FetchDescriptor<GolfCourse>(
+            predicate: #Predicate<GolfCourse> { course in
+                course.name == "The Golf Club at North Hampton"
+            }
+        )
+        if let existing = try? context.fetch(descriptor).first {
+            return existing
+        }
+        
         let course = GolfCourse(
             name: "The Golf Club at North Hampton",
             location: "Fernandina Beach, FL",
@@ -189,6 +209,16 @@ class CourseImporter {
     }
     
     static func createLaurelIslandLinks(context: ModelContext) -> GolfCourse {
+        // Check if course already exists
+        let descriptor = FetchDescriptor<GolfCourse>(
+            predicate: #Predicate<GolfCourse> { course in
+                course.name == "Laurel Island Links"
+            }
+        )
+        if let existing = try? context.fetch(descriptor).first {
+            return existing
+        }
+        
         let course = GolfCourse(
             name: "Laurel Island Links",
             location: "Kingsland, GA",
@@ -244,6 +274,16 @@ class CourseImporter {
     }
     
     static func createClubAtOspreyCove(context: ModelContext) -> GolfCourse {
+        // Check if course already exists
+        let descriptor = FetchDescriptor<GolfCourse>(
+            predicate: #Predicate<GolfCourse> { course in
+                course.name == "The Club at Osprey Cove"
+            }
+        )
+        if let existing = try? context.fetch(descriptor).first {
+            return existing
+        }
+        
         let course = GolfCourse(
             name: "The Club at Osprey Cove",
             location: "St. Marys, GA",
@@ -345,6 +385,17 @@ class CourseImporter {
               let courseDict = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
               let name = courseDict["name"] as? String else {
             return nil
+        }
+        
+        // Check if course with this name already exists
+        let descriptor = FetchDescriptor<GolfCourse>(
+            predicate: #Predicate<GolfCourse> { course in
+                course.name == name
+            }
+        )
+        if let existingCourse = try? context.fetch(descriptor).first {
+            print("⚠️ Course '\(name)' already exists, skipping import")
+            return existingCourse
         }
         
         let location = courseDict["location"] as? String

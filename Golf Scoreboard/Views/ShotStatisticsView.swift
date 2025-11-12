@@ -35,6 +35,33 @@ struct ShotStatisticsView: View {
         }
     }
     
+    // Calculate average scores (gross and net) for a player across filtered games
+    private func averageScores(for player: Player) -> (gross: Double, net: Double)? {
+        let playerGames = filteredGames.filter { game in
+            game.playersArray.contains(where: { $0.id == player.id })
+        }
+        
+        guard !playerGames.isEmpty else { return nil }
+        
+        var totalGross = 0
+        var totalNet = 0
+        var gameCount = 0
+        
+        for game in playerGames {
+            if let score = game.totalScores.first(where: { $0.player.id == player.id }) {
+                totalGross += score.gross
+                totalNet += score.net
+                gameCount += 1
+            }
+        }
+        
+        guard gameCount > 0 else { return nil }
+        return (
+            gross: Double(totalGross) / Double(gameCount),
+            net: Double(totalNet) / Double(gameCount)
+        )
+    }
+    
     // Available game count options
     private let gameCountOptions = [0, 5, 10, 20, 50]
     
@@ -96,6 +123,59 @@ struct ShotStatisticsView: View {
                                 Spacer()
                                 Text("\(Int(overall.averageDistance)) yds")
                                     .foregroundColor(.secondary)
+                            }
+                            
+                            // Average scores (gross and net)
+                            if let avgScores = averageScores(for: player) {
+                                HStack {
+                                    Text("Average Score (Gross)")
+                                    Spacer()
+                                    Text(String(format: "%.1f", avgScores.gross))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                HStack {
+                                    Text("Average Score (Net)")
+                                    Spacer()
+                                    Text(String(format: "%.1f", avgScores.net))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
+                            // Bunker statistics
+                            let bunkerStats = ShotStatistics.getBunkerStats(for: player, shots: validShots)
+                            if bunkerStats.totalBunkerShots > 0 {
+                                Divider()
+                                
+                                HStack {
+                                    Text("Bunker Shots")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                    Spacer()
+                                }
+                                
+                                HStack {
+                                    Text("Per Round:")
+                                    Spacer()
+                                    Text(String(format: "%.1f", bunkerStats.shotsPerRound))
+                                        .foregroundColor(.secondary)
+                                }
+                                
+                                if bunkerStats.averageDistance > 0 {
+                                    HStack {
+                                        Text("Average Distance:")
+                                        Spacer()
+                                        Text(String(format: "%.0f yds", bunkerStats.averageDistance))
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                
+                                HStack {
+                                    Text("Total:")
+                                    Spacer()
+                                    Text("\(bunkerStats.totalBunkerShots)")
+                                        .foregroundColor(.secondary)
+                                }
                             }
                             
                             // Stats by club

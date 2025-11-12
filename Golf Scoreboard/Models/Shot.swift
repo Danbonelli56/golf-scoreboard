@@ -35,10 +35,11 @@ final class Shot {
     var isRetaking: Bool = false // true if retaking from tee (vs taking a drop)
     var isLong: Bool = false // true if shot went long (past target)
     var isShort: Bool = false // true if shot came short (didn't reach target)
+    var isInBunker: Bool = false // true if shot landed in a bunker/sand trap
     
     init(player: Player? = nil, holeNumber: Int, shotNumber: Int, 
          distanceToHole: Int? = nil, originalDistanceFeet: Int? = nil, club: String? = nil, 
-         result: ShotResult = .straight, isPutt: Bool = false, distanceTraveled: Int? = nil, isPenalty: Bool = false, isRetaking: Bool = false, isLong: Bool = false, isShort: Bool = false) {
+         result: ShotResult = .straight, isPutt: Bool = false, distanceTraveled: Int? = nil, isPenalty: Bool = false, isRetaking: Bool = false, isLong: Bool = false, isShort: Bool = false, isInBunker: Bool = false) {
         self.player = player
         self.holeNumber = holeNumber
         self.shotNumber = shotNumber
@@ -52,6 +53,7 @@ final class Shot {
         self.isRetaking = isRetaking
         self.isLong = isLong
         self.isShort = isShort
+        self.isInBunker = isInBunker
         self.createdAt = Date()
     }
     
