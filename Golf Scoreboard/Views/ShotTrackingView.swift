@@ -49,14 +49,55 @@ struct ShotTrackingView: View {
         return allShots
     }
     
+    // Filter out completed games and games from previous days
+    private var activeGames: [Game] {
+        games.filter { game in
+            // Exclude if explicitly marked as completed
+            if game.isCompleted {
+                return false
+            }
+            // Exclude games from previous days (they should be archived)
+            if game.isFromPreviousDay {
+                return false
+            }
+            return true
+        }
+    }
+    
     private var selectedGame: Game? {
         get {
             guard !selectedGameIDString.isEmpty, let id = UUID(uuidString: selectedGameIDString) else { return nil }
-            return games.first { $0.id == id }
+            return activeGames.first { $0.id == id }
         }
         set {
             selectedGameIDString = newValue?.id.uuidString ?? ""
         }
+    }
+    
+    // Archive expired games and clear selection if needed
+    private func archiveExpiredGames() {
+        var clearedSelection = false
+        
+        for game in games {
+            // Check if game is from a previous day and not yet completed
+            if game.isFromPreviousDay && !game.isCompleted {
+                // Mark as completed (archived)
+                game.isCompleted = true
+                
+                // Clear selection if this was the selected game
+                if let selectedID = UUID(uuidString: selectedGameIDString), selectedID == game.id {
+                    clearedSelection = true
+                }
+            }
+        }
+        
+        // Save changes and clear selection if needed
+        if clearedSelection {
+            _selectedGameIDString.wrappedValue = ""
+            currentHole = 1 // Reset to hole 1
+        }
+        
+        try? modelContext.save()
     }
     
     var body: some View {
@@ -104,8 +145,11 @@ struct ShotTrackingView: View {
                 AddShotView(game: selectedGame, holeNumber: currentHole, player: selectedPlayer)
             }
             .onAppear {
-                // Automatically select the most recent game when the view appears
-                if selectedGame == nil, let recentGame = games.sorted(by: { $0.date > $1.date }).first {
+                // Archive expired games when view appears
+                archiveExpiredGames()
+                
+                // Automatically select the most recent active game when the view appears
+                if selectedGame == nil, let recentGame = activeGames.sorted(by: { $0.date > $1.date }).first {
                     _selectedGameIDString.wrappedValue = recentGame.id.uuidString
                 }
                 // Validate and clamp currentHole to valid range (1-18)
@@ -895,13 +939,11 @@ struct ShotGroupCard: View {
                 ForEach(playerShots, id: \.id) { shot in
                     ShotRow(shot: shot) {
                         // Delete callback - recalculate distances after deletion
-                        let deletedShotNumber = shot.shotNumber
-                        
                         modelContext.delete(shot)
                         try? modelContext.save()
                         
                         // Recalculate distances for remaining shots after deletion
-                        if let game = games.first(where: { $0.id == currentGameID }) {
+                        if games.first(where: { $0.id == currentGameID }) != nil {
                             // Get remaining shots after deletion
                             let remainingShots = allShotsQuery.filter { s in
                                 guard let shotGameID = s.game?.id, s.id != shot.id else { return false }

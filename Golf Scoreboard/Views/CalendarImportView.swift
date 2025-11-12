@@ -55,7 +55,7 @@ struct CalendarImportView: View {
                     }
                     .padding()
                     
-                case .authorized:
+                case .authorized, .fullAccess, .writeOnly:
                     if golfEvents.isEmpty && !calendarManager.isLoading && hasSearched {
                         VStack(spacing: 20) {
                             Image(systemName: "calendar.badge.exclamationmark")

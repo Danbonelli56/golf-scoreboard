@@ -21,8 +21,20 @@ struct GameHistoryView: View {
         }
     }
     
+    // Archive expired games when viewing history
+    private func archiveExpiredGames() {
+        for game in allGames {
+            // Check if game is from a previous day and not yet completed
+            if game.isFromPreviousDay && !game.isCompleted {
+                // Mark as completed (archived) - shots are preserved via relationship
+                game.isCompleted = true
+            }
+        }
+        try? modelContext.save()
+    }
+    
     var body: some View {
-        NavigationView {
+        NavigationStack {
             Group {
                 if completedGames.isEmpty {
                     VStack(spacing: 20) {
@@ -41,11 +53,9 @@ struct GameHistoryView: View {
                     .padding()
                 } else {
                     List(completedGames) { game in
-                        GameHistoryRow(game: game)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                _selectedGameIDString.wrappedValue = game.id.uuidString
-                            }
+                        NavigationLink(destination: GameDetailView(game: game)) {
+                            GameHistoryRow(game: game)
+                        }
                     }
                 }
             }
@@ -62,6 +72,10 @@ struct GameHistoryView: View {
                         Image(systemName: "ellipsis.circle")
                     }
                 }
+            }
+            .onAppear {
+                // Archive expired games when viewing history
+                archiveExpiredGames()
             }
         }
     }

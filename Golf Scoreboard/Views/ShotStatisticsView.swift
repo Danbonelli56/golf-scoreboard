@@ -11,27 +11,77 @@ import SwiftData
 struct ShotStatisticsView: View {
     @Query private var players: [Player]
     @Query private var shots: [Shot]
-    @Query private var games: [Game] // Query games to filter shots
+    @Query(sort: \Game.date, order: .reverse) private var allGames: [Game]
     @State private var selectedTab = 0
+    @AppStorage("statsGameCount") private var statsGameCount: Int = 0
     
-    // Filter shots to only include those from existing (non-deleted) games
+    // Filter games based on user selection
+    private var filteredGames: [Game] {
+        if statsGameCount == 0 {
+            // Show all games
+            return allGames
+        } else {
+            // Show only the most recent N games
+            return Array(allGames.prefix(statsGameCount))
+        }
+    }
+    
+    // Filter shots to only include those from filtered games
     private var validShots: [Shot] {
-        let validGameIDs = Set(games.map { $0.id })
+        let validGameIDs = Set(filteredGames.map { $0.id })
         return shots.filter { shot in
             guard let gameID = shot.game?.id else { return false }
             return validGameIDs.contains(gameID)
         }
     }
     
+    // Available game count options
+    private let gameCountOptions = [0, 5, 10, 20, 50]
+    
+    private var gameCountText: String {
+        if statsGameCount == 0 {
+            return "All Games (\(allGames.count))"
+        } else {
+            let actualCount = min(statsGameCount, allGames.count)
+            return "Last \(actualCount) Games"
+        }
+    }
+    
     var body: some View {
         NavigationStack {
-            TabView(selection: $selectedTab) {
-                // Summary View
-                List {
-                    ForEach(players) { player in
-                        Section(header: Text(player.name).font(.headline)) {
-                            let stats = ShotStatistics.calculateStatistics(for: player, shots: validShots)
-                            let overall = ShotStatistics.getOverallStats(for: player, shots: validShots)
+            VStack(spacing: 0) {
+                // Game count selector
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Games Included")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(gameCountText)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal)
+                    
+                    Picker("Number of Games", selection: $statsGameCount) {
+                        ForEach(gameCountOptions, id: \.self) { count in
+                            Text(count == 0 ? "All Games" : "Last \(count) Games")
+                                .tag(count)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal)
+                }
+                .padding(.vertical, 8)
+                .background(Color(.secondarySystemBackground))
+                
+                TabView(selection: $selectedTab) {
+                    // Summary View
+                    List {
+                        ForEach(players) { player in
+                            Section(header: Text(player.name).font(.headline)) {
+                                let stats = ShotStatistics.calculateStatistics(for: player, shots: validShots)
+                                let overall = ShotStatistics.getOverallStats(for: player, shots: validShots)
                             
                             // Overall stats
                             HStack {
@@ -70,18 +120,19 @@ struct ShotStatisticsView: View {
                             }
                         }
                     }
-                }
-                .tabItem {
-                    Label("Summary", systemImage: "list.bullet")
-                }
-                .tag(0)
-                
-                // Charts View
-                StatisticsChartView()
-                    .tabItem {
-                        Label("Charts", systemImage: "chart.line.uptrend.xyaxis")
                     }
-                    .tag(1)
+                    .tabItem {
+                        Label("Summary", systemImage: "list.bullet")
+                    }
+                    .tag(0)
+                    
+                    // Charts View
+                    StatisticsChartView(filteredGames: filteredGames, filteredShots: validShots)
+                        .tabItem {
+                            Label("Charts", systemImage: "chart.line.uptrend.xyaxis")
+                        }
+                        .tag(1)
+                }
             }
             .navigationTitle("Shot Statistics")
         }
@@ -188,6 +239,5 @@ struct ClubStatsRow: View {
 
 #Preview {
     ShotStatisticsView()
-        .modelContainer(for: [Player.self, Shot.self], inMemory: true)
+        .modelContainer(for: [Player.self, Shot.self, Game.self], inMemory: true)
 }
-

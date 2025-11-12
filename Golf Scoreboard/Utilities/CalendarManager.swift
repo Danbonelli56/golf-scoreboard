@@ -19,11 +19,22 @@ class CalendarManager: ObservableObject {
     
     func requestAccess() async -> Bool {
         do {
-            let granted = try await eventStore.requestAccess(to: .event)
-            await MainActor.run {
-                authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+            if #available(iOS 17.0, *) {
+                // Use the new iOS 17+ API
+                let granted = try await eventStore.requestFullAccessToEvents()
+                await MainActor.run {
+                    // iOS 17+ uses .fullAccess or .writeOnly instead of .authorized
+                    authorizationStatus = granted ? .fullAccess : .denied
+                }
+                return granted
+            } else {
+                // Use the legacy API for iOS 16 and earlier
+                let granted = try await eventStore.requestAccess(to: .event)
+                await MainActor.run {
+                    authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+                }
+                return granted
             }
-            return granted
         } catch {
             print("Error requesting calendar access: \(error)")
             return false
@@ -31,7 +42,12 @@ class CalendarManager: ObservableObject {
     }
     
     var hasAccess: Bool {
-        authorizationStatus == .authorized
+        if #available(iOS 17.0, *) {
+            // iOS 17+ uses .fullAccess or .writeOnly
+            return authorizationStatus == .fullAccess || authorizationStatus == .writeOnly
+        } else {
+            return authorizationStatus == .authorized
+        }
     }
     
     func searchGolfEvents() async -> [GolfCalendarEvent] {

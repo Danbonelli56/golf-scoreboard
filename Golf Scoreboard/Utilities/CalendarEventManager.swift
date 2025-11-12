@@ -28,14 +28,37 @@ class CalendarEventManager: ObservableObject {
         checkAuthorizationStatus()
     }
     
-    func checkAuthorizationStatus() {
-        // For iOS 17+, we check authorization differently
+    /// Helper to check if we have access (works for both iOS 16 and iOS 17+)
+    private var hasAccess: Bool {
+        let status = EKEventStore.authorizationStatus(for: .event)
         if #available(iOS 17.0, *) {
-            // In iOS 17+, authorization is checked via the eventStore's status
-            // We'll use the traditional method which still works but is deprecated
-            authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+            // In iOS 17+, check for full access or write-only access
+            return status == .fullAccess || status == .writeOnly
         } else {
-            authorizationStatus = EKEventStore.authorizationStatus(for: .event)
+            // In iOS 16 and earlier, check for authorized status
+            return status == .authorized
+        }
+    }
+    
+    func checkAuthorizationStatus() {
+        // Check authorization status - works for both iOS 16 and iOS 17+
+        let status = EKEventStore.authorizationStatus(for: .event)
+        // In iOS 17+, status can be .fullAccess or .writeOnly instead of .authorized
+        if #available(iOS 17.0, *) {
+            // Map iOS 17+ status values to our internal status
+            switch status {
+            case .fullAccess, .writeOnly:
+                // Use .fullAccess as the "authorized" equivalent for iOS 17+
+                authorizationStatus = .fullAccess
+            case .denied, .restricted:
+                authorizationStatus = .denied
+            case .notDetermined:
+                authorizationStatus = .notDetermined
+            @unknown default:
+                authorizationStatus = .denied
+            }
+        } else {
+            authorizationStatus = status
         }
     }
     
@@ -44,7 +67,7 @@ class CalendarEventManager: ObservableObject {
             // Use the new iOS 17+ API
             let status = try await eventStore.requestFullAccessToEvents()
             await MainActor.run {
-                authorizationStatus = status ? .authorized : .denied
+                authorizationStatus = status ? .fullAccess : .denied
             }
         } else {
             // Use the legacy API for iOS 16 and earlier
@@ -62,7 +85,7 @@ class CalendarEventManager: ObservableObject {
     func fetchGolfEvents(for date: Date) async throws -> [GolfEvent] {
         // Check authorization status
         checkAuthorizationStatus()
-        guard authorizationStatus == .authorized else {
+        guard hasAccess else {
             throw CalendarError.notAuthorized
         }
         

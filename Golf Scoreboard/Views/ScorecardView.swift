@@ -39,6 +39,32 @@ struct ScorecardView: View {
         }
     }
     
+    // Archive expired games and clear selection if needed
+    private func archiveExpiredGames() {
+        var clearedSelection = false
+        
+        for game in allGames {
+            // Check if game is from a previous day and not yet completed
+            if game.isFromPreviousDay && !game.isCompleted {
+                // Mark as completed (archived)
+                game.isCompleted = true
+                
+                // Clear selection if this was the selected game
+                if let selectedID = UUID(uuidString: selectedGameIDString), selectedID == game.id {
+                    clearedSelection = true
+                }
+            }
+        }
+        
+        // Save changes and clear selection if needed
+        if clearedSelection {
+            _selectedGameIDString.wrappedValue = ""
+            currentHole = 1 // Reset to hole 1
+        }
+        
+        try? modelContext.save()
+    }
+    
     private var games: [Game] {
         activeGames
     }
@@ -131,6 +157,10 @@ struct ScorecardView: View {
             }
             .sheet(isPresented: $showingGameSetup) {
                 GameSetupView(selectedGameIDString: $selectedGameIDString, games: games)
+            }
+            .onAppear {
+                // Archive expired games when view appears
+                archiveExpiredGames()
             }
         }
     }
