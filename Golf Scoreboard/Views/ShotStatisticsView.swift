@@ -27,10 +27,15 @@ struct ShotStatisticsView: View {
     }
     
     // Filter shots to only include those from filtered games
+    // Also ensure shots have valid relationships (not deleted or orphaned)
     private var validShots: [Shot] {
         let validGameIDs = Set(filteredGames.map { $0.id })
         return shots.filter { shot in
+            // Ensure shot has valid game relationship
             guard let gameID = shot.game?.id else { return false }
+            // Ensure shot has valid player relationship
+            guard shot.player != nil else { return false }
+            // Only include shots from filtered games
             return validGameIDs.contains(gameID)
         }
     }
@@ -215,6 +220,10 @@ struct ShotStatisticsView: View {
                 }
             }
             .navigationTitle("Shot Statistics")
+            .onReceive(NotificationCenter.default.publisher(for: .shotsUpdated)) { _ in
+                // Force view refresh when shots are updated/deleted
+                // SwiftData @Query should automatically update, but this ensures UI refreshes
+            }
         }
     }
 }

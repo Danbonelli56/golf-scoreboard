@@ -94,8 +94,15 @@ class ShotStatistics {
         
         // Filter shots for this player - include all shots, not just those with distance
         // For putts specifically, track them even if distanceTraveled is 0 or nil
+        // Also ensure shots have valid relationships (not deleted or orphaned)
         let validShots = shots.filter { 
-            $0.player?.id == player.id
+            // Must match the player
+            guard $0.player?.id == player.id else { return false }
+            // Must have valid game relationship
+            guard $0.game != nil else { return false }
+            // Must have a club assigned
+            guard $0.club != nil else { return false }
+            return true
         }
         
         // Group by club
@@ -127,8 +134,13 @@ class ShotStatistics {
     
     static func getOverallStats(for player: Player, shots: [Shot]) -> (totalShots: Int, averageDistance: Double, totalDistance: Int) {
         let validShots = shots.filter { 
-            $0.player?.id == player.id && 
-            $0.distanceTraveled != nil 
+            // Must match the player
+            guard $0.player?.id == player.id else { return false }
+            // Must have valid game relationship
+            guard $0.game != nil else { return false }
+            // Must have distance traveled
+            guard $0.distanceTraveled != nil else { return false }
+            return true
         }
         
         let totalShots = validShots.count
@@ -141,9 +153,13 @@ class ShotStatistics {
     // Calculate bunker statistics for a player
     static func getBunkerStats(for player: Player, shots: [Shot]) -> (totalBunkerShots: Int, averageDistance: Double, shotsPerRound: Double, uniqueGames: Set<UUID>) {
         let bunkerShots = shots.filter { 
-            $0.player?.id == player.id && 
-            $0.isInBunker && 
-            !$0.isPutt
+            // Must match the player
+            guard $0.player?.id == player.id else { return false }
+            // Must have valid game relationship
+            guard $0.game != nil else { return false }
+            // Must be a bunker shot and not a putt
+            guard $0.isInBunker && !$0.isPutt else { return false }
+            return true
         }
         
         let totalBunkerShots = bunkerShots.count

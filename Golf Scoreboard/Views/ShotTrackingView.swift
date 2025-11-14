@@ -31,7 +31,8 @@ struct ShotTrackingView: View {
         var club: String?
         var result: ShotResult?
         var distance: Int? // yards
-        var distanceFeet: Int? // feet (for putts)
+        var distanceFeet: Int? // feet (for putts - initial distance to hole)
+        var overshootFeet: Int? // for putts: positive if went long, negative if short, nil if holed
         var isPutt: Bool = false
         var isLong: Bool = false
         var isShort: Bool = false
@@ -187,6 +188,14 @@ struct ShotTrackingView: View {
             return
         }
         
+        // Check if input is ONLY a direction (left/right/straight) - apply to previous shot
+        if let directionOnly = detectDirectionOnly(text: lowerText) {
+            if updatePreviousShotWithDirection(direction: directionOnly, game: game) {
+                print("✅ Updated previous shot with direction: \(directionOnly)")
+                return // Don't continue parsing as a new shot
+            }
+        }
+        
         // Start with existing pending shot or create new one
         var currentShot = pendingShot ?? PendingShot()
         if pendingShot != nil {
@@ -224,6 +233,84 @@ struct ShotTrackingView: View {
             pendingShot = nil // Reset for next shot
         } else {
             print("⏳ Waiting for more info (club: \(currentShot.club != nil), result: \(currentShot.result != nil), distance: \(currentShot.distance != nil))")
+        }
+    }
+    
+    // Detect if input is ONLY a direction (left/right/straight) without club, distance, etc.
+    private func detectDirectionOnly(text: String) -> ShotResult? {
+        // Remove common filler words
+        let cleaned = text.trimmingCharacters(in: .whitespaces)
+        
+        // Check for direction-only patterns
+        if cleaned == "left" || cleaned == "went left" || cleaned == "to the left" {
+            return .left
+        } else if cleaned == "right" || cleaned == "went right" || cleaned == "to the right" {
+            return .right
+        } else if cleaned == "straight" || cleaned == "center" || cleaned == "down the middle" {
+            return .straight
+        }
+        
+        // Check if text contains ONLY direction words and no other shot-related keywords
+        let hasDirection = text.contains("left") || text.contains("right") || text.contains("straight") || text.contains("center")
+        let hasClub = text.range(of: "\\b(driver|wood|iron|hybrid|wedge|putter|pw|gw|sw|lw)\\b", options: [.regularExpression, .caseInsensitive]) != nil
+        let hasDistance = text.range(of: "\\d+\\s*(yards?|feet?|ft|yds?)", options: [.regularExpression, .caseInsensitive]) != nil
+        let hasHole = text.range(of: "hole\\s+\\d+", options: [.regularExpression, .caseInsensitive]) != nil
+        let hasPlayer = text.range(of: "\\b(john|mike|dan|player)\\b", options: [.regularExpression, .caseInsensitive]) != nil
+        
+        // If it has direction but NO club, distance, hole number, or player name, treat as direction-only
+        if hasDirection && !hasClub && !hasDistance && !hasHole && !hasPlayer {
+            if text.contains("left") {
+                return .left
+            } else if text.contains("right") {
+                return .right
+            } else if text.contains("straight") || text.contains("center") {
+                return .straight
+            }
+        }
+        
+        return nil
+    }
+    
+    // Update the most recent shot for the current player/hole with the given direction
+    private func updatePreviousShotWithDirection(direction: ShotResult, game: Game) -> Bool {
+        // Determine the target player (same logic as parseIntoPendingShot)
+        var targetPlayer: Player?
+        if let last = lastShotPlayer, game.playersArray.contains(where: { $0.id == last.id }) {
+            targetPlayer = last
+        } else if let current = game.playersArray.first(where: { $0.isCurrentUser }) {
+            targetPlayer = current
+        } else {
+            targetPlayer = game.playersArray.first
+        }
+        
+        guard let player = targetPlayer else {
+            print("⚠️ No player found to update shot direction")
+            return false
+        }
+        
+        // Find the most recent shot for this player on the current hole
+        let gameID = game.id
+        let playerShots = shots.filter {
+            guard let shotGameID = $0.game?.id else { return false }
+            return shotGameID == gameID && $0.player?.id == player.id && $0.holeNumber == currentHole
+        }.sorted { $0.shotNumber > $1.shotNumber } // Sort descending to get most recent first
+        
+        guard let mostRecentShot = playerShots.first else {
+            print("⚠️ No previous shot found to update with direction")
+            return false
+        }
+        
+        // Update the shot's result
+        mostRecentShot.result = direction.rawValue
+        print("📝 Updating Shot #\(mostRecentShot.shotNumber) (\(mostRecentShot.club ?? "unknown")) with result: \(direction.rawValue)")
+        
+        do {
+            try modelContext.save()
+            NotificationCenter.default.post(name: .shotsUpdated, object: nil)
+            return true
+        } catch {
+            print("❌ Error updating shot direction: \(error)")
+            return false
         }
     }
     
@@ -300,6 +387,7 @@ struct ShotTrackingView: View {
         // Extract distance BEFORE hole number to avoid conflicts
         var distance: Int? = nil // remaining distance to hole in yards
         var distanceFeet: Int? = nil // remaining distance in feet (for putts)
+        var overshootFeet: Int? = nil // for putts: positive if went long, negative if short, nil if holed
         // Pattern 1: "228 yards"
         if let distancePattern = try? NSRegularExpression(pattern: "(\\d+)\\s*yards?", options: .caseInsensitive),
            let match = distancePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
@@ -307,7 +395,98 @@ struct ShotTrackingView: View {
             distance = Int(String(lowerText[distRange]))
             print("✅ Found distance: \(distance!)")
         }
-        // Pattern 2: feet for putts ("10 feet", "12 ft")
+        // Pattern 2a: "X feet left/right [and] Y feet long/short" - direction + initial distance + overshoot
+        // Examples: "10 feet left and 2 feet long" OR "30 feet left 4 feet long" (without "and")
+        // This pattern matches: [distance] feet [direction] [optional "and"] [overshoot] feet [long/short]
+        if distance == nil {
+            // Try with "and" first
+            if let combinedPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(?:feet|foot|ft)\\s+(left|right)\\s+and\\s+(\\d+)\\s*(?:feet|foot|ft)\\s+(long|short)", options: .caseInsensitive),
+               let match = combinedPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)) {
+                if match.numberOfRanges > 1, let initialRange = Range(match.range(at: 1), in: lowerText),
+                   let initialFeet = Int(String(lowerText[initialRange])) {
+                    distanceFeet = initialFeet
+                    let yards = Int(round(Double(initialFeet) / 3.0))
+                    distance = yards
+                    print("✅ Found initial distance (feet): \(initialFeet)ft -> ~\(yards)yds")
+                }
+                if match.numberOfRanges > 3, let overshootRange = Range(match.range(at: 3), in: lowerText),
+                   let overshoot = Int(String(lowerText[overshootRange])) {
+                    if match.numberOfRanges > 4, let directionRange = Range(match.range(at: 4), in: lowerText) {
+                        let direction = String(lowerText[directionRange]).lowercased()
+                        if direction.contains("long") {
+                            overshootFeet = overshoot
+                            print("✅ Found overshoot: \(overshoot)ft long")
+                        } else if direction.contains("short") {
+                            overshootFeet = -overshoot
+                            print("✅ Found undershoot: \(overshoot)ft short")
+                        }
+                    }
+                }
+            }
+            // Try without "and" - "X feet left Y feet long"
+            else if let combinedPatternNoAnd = try? NSRegularExpression(pattern: "(\\d+)\\s*(?:feet|foot|ft)\\s+(left|right)\\s+(\\d+)\\s*(?:feet|foot|ft)\\s+(long|short)", options: .caseInsensitive),
+                    let match = combinedPatternNoAnd.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)) {
+                if match.numberOfRanges > 1, let initialRange = Range(match.range(at: 1), in: lowerText),
+                   let initialFeet = Int(String(lowerText[initialRange])) {
+                    distanceFeet = initialFeet
+                    let yards = Int(round(Double(initialFeet) / 3.0))
+                    distance = yards
+                    print("✅ Found initial distance (feet, no 'and'): \(initialFeet)ft -> ~\(yards)yds")
+                }
+                if match.numberOfRanges > 3, let overshootRange = Range(match.range(at: 3), in: lowerText),
+                   let overshoot = Int(String(lowerText[overshootRange])) {
+                    if match.numberOfRanges > 4, let directionRange = Range(match.range(at: 4), in: lowerText) {
+                        let direction = String(lowerText[directionRange]).lowercased()
+                        if direction.contains("long") {
+                            overshootFeet = overshoot
+                            print("✅ Found overshoot (no 'and'): \(overshoot)ft long")
+                        } else if direction.contains("short") {
+                            overshootFeet = -overshoot
+                            print("✅ Found undershoot (no 'and'): \(overshoot)ft short")
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Pattern 2b: "X foot long" or "X feet long" - implies BOTH initial distance AND overshoot are X
+        // Example: "20 foot long" means 20 feet to hole AND went 20 feet long
+        // IMPORTANT: Only match if there's NO other distance mentioned before it (to avoid matching "30 feet left 4 feet long")
+        if distance == nil {
+            // Check if there's another distance before "X feet long"
+            let hasOtherDistanceBefore = lowerText.range(of: "\\d+\\s*(?:feet|foot|ft)\\s+(?:left|right|straight)", options: [.regularExpression, .caseInsensitive]) != nil
+            
+            if !hasOtherDistanceBefore, let sameValuePattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(?:feet|foot|ft)\\s+long", options: .caseInsensitive),
+               let match = sameValuePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+               match.numberOfRanges > 1, let feetRange = Range(match.range(at: 1), in: lowerText),
+               let feet = Int(String(lowerText[feetRange])) {
+                distanceFeet = feet
+                overshootFeet = feet // Same value for both initial distance and overshoot
+                let yards = Int(round(Double(feet) / 3.0))
+                distance = yards
+                print("✅ Found distance (same value long): \(feet)ft to hole AND \(feet)ft long -> ~\(yards)yds")
+            }
+        }
+        
+        // Pattern 2c: "X foot short" or "X feet short" - implies BOTH initial distance AND undershoot are X
+        // IMPORTANT: Only match if there's NO other distance mentioned before it
+        if distance == nil {
+            // Check if there's another distance before "X feet short"
+            let hasOtherDistanceBefore = lowerText.range(of: "\\d+\\s*(?:feet|foot|ft)\\s+(?:left|right|straight)", options: [.regularExpression, .caseInsensitive]) != nil
+            
+            if !hasOtherDistanceBefore, let sameValueShortPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(?:feet|foot|ft)\\s+short", options: .caseInsensitive),
+               let match = sameValueShortPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+               match.numberOfRanges > 1, let feetRange = Range(match.range(at: 1), in: lowerText),
+               let feet = Int(String(lowerText[feetRange])) {
+                distanceFeet = feet
+                overshootFeet = -feet // Negative for short
+                let yards = Int(round(Double(feet) / 3.0))
+                distance = yards
+                print("✅ Found distance (same value short): \(feet)ft to hole AND \(feet)ft short -> ~\(yards)yds")
+            }
+        }
+        
+        // Pattern 2d: feet for putts ("10 feet", "12 ft") - simple case without overshoot
         if distance == nil, let feetPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(feet|foot|ft)", options: .caseInsensitive),
            let match = feetPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
            let feetRange = Range(match.range(at: 1), in: lowerText),
@@ -328,6 +507,47 @@ struct ShotTrackingView: View {
             } else if match.numberOfRanges > 2, let distRange2 = Range(match.range(at: 2), in: lowerText), !distRange2.isEmpty {
                 distance = Int(String(lowerText[distRange2]))
                 print("✅ Found distance (to hole): \(distance!)")
+            }
+        }
+        
+        // Pattern 4: Extract overshoot/undershoot for putts - "10 feet, 2 feet long" or "10 feet, 1 foot short"
+        // This pattern captures: [initial distance] feet, [overshoot] feet long/short
+        // Only matches if overshootFeet hasn't been set yet (to avoid conflicts with Pattern 2b/2c)
+        if overshootFeet == nil, let overshootPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(?:feet|foot|ft)[^,]*,\\s*(\\d+)\\s*(?:feet|foot|ft)\\s*(long|short)", options: .caseInsensitive),
+           let match = overshootPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)) {
+            // First capture group is the initial distance (already captured above)
+            // Second capture group is the overshoot distance
+            if match.numberOfRanges > 2, let overshootRange = Range(match.range(at: 2), in: lowerText),
+               let overshoot = Int(String(lowerText[overshootRange])) {
+                // Third capture group determines if it's long (positive) or short (negative)
+                if match.numberOfRanges > 3, let directionRange = Range(match.range(at: 3), in: lowerText) {
+                    let direction = String(lowerText[directionRange]).lowercased()
+                    if direction.contains("long") {
+                        overshootFeet = overshoot // Positive for long
+                        print("✅ Found overshoot: \(overshoot)ft long")
+                    } else if direction.contains("short") {
+                        overshootFeet = -overshoot // Negative for short
+                        print("✅ Found undershoot: \(overshoot)ft short")
+                    }
+                }
+            }
+        }
+        
+        // Pattern 5: Alternative pattern - "10 feet long by 2 feet" or "went 2 feet long"
+        // This captures overshoot when mentioned separately
+        if overshootFeet == nil {
+            if let altPattern = try? NSRegularExpression(pattern: "(?:went|by|past|over)\\s+(\\d+)\\s*(?:feet|foot|ft)\\s+long", options: .caseInsensitive),
+               let match = altPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+               match.numberOfRanges > 1, let overshootRange = Range(match.range(at: 1), in: lowerText),
+               let overshoot = Int(String(lowerText[overshootRange])) {
+                overshootFeet = overshoot
+                print("✅ Found overshoot (alt pattern): \(overshoot)ft long")
+            } else if let altPattern = try? NSRegularExpression(pattern: "(?:short|stopped)\\s+(?:by|at)?\\s*(\\d+)\\s*(?:feet|foot|ft)", options: .caseInsensitive),
+                      let match = altPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+                      match.numberOfRanges > 1, let undershootRange = Range(match.range(at: 1), in: lowerText),
+                      let undershoot = Int(String(lowerText[undershootRange])) {
+                overshootFeet = -undershoot
+                print("✅ Found undershoot (alt pattern): \(undershoot)ft short")
             }
         }
         
@@ -467,6 +687,15 @@ struct ShotTrackingView: View {
         }
         if distanceFeet != nil {
             shot.distanceFeet = distanceFeet
+        }
+        if overshootFeet != nil {
+            shot.overshootFeet = overshootFeet
+            // Set isLong/isShort flags based on overshoot
+            if overshootFeet! > 0 {
+                shot.isLong = true
+            } else if overshootFeet! < 0 {
+                shot.isShort = true
+            }
         }
         if isPutt {
             shot.isPutt = isPutt
@@ -610,19 +839,33 @@ struct ShotTrackingView: View {
             
             // Adjust for putt long/short modifiers
             if pending.isPutt, let feet = pending.distanceFeet {
-                let yardsFromFeet = Double(feet) / 3.0
-                if pending.isLong {
-                    // Ball went past the hole - previous shot traveled MORE (went yardsFromFeet beyond hole)
-                    // If went 10ft past hole, ball ended 0yds (at hole) minus the overshoot
-                    effectiveCurrent = -yardsFromFeet
-                    print("⛳ Putt was \(feet)ft long, previous shot was \(String(format: "%.1f", yardsFromFeet))yds beyond the hole.")
-                } else if pending.isShort {
-                    // Ball stopped short - previous shot traveled LESS (stopped yardsFromFeet short of hole)
-                    // If stopped 10ft short of hole, add that distance
-                    effectiveCurrent = yardsFromFeet
-                    print("⛳ Putt was \(feet)ft short, previous shot was \(String(format: "%.1f", yardsFromFeet))yds short of the hole.")
+                // If overshootFeet is provided, use it for more accurate calculation
+                if let overshoot = pending.overshootFeet {
+                    // overshootFeet: positive = went long (past hole), negative = stopped short
+                    // effectiveCurrent should be where the ball ended relative to the hole
+                    let overshootYards = Double(overshoot) / 3.0
+                    effectiveCurrent = overshootYards
+                    if overshoot > 0 {
+                        print("⛳ Putt was \(feet)ft, went \(overshoot)ft long. Ball ended \(String(format: "%.1f", overshootYards))yds past hole.")
+                    } else {
+                        print("⛳ Putt was \(feet)ft, stopped \(abs(overshoot))ft short. Ball ended \(String(format: "%.1f", abs(overshootYards)))yds short of hole.")
+                    }
                 } else {
-                    print("⛳ No long/short modifier for \(feet)ft putt")
+                    // No overshoot specified - use legacy logic
+                    let yardsFromFeet = Double(feet) / 3.0
+                    if pending.isLong {
+                        // Ball went past the hole - previous shot traveled MORE (went yardsFromFeet beyond hole)
+                        effectiveCurrent = -yardsFromFeet
+                        print("⛳ Putt was \(feet)ft long (legacy), previous shot was \(String(format: "%.1f", yardsFromFeet))yds beyond the hole.")
+                    } else if pending.isShort {
+                        // Ball stopped short - previous shot traveled LESS (stopped yardsFromFeet short of hole)
+                        effectiveCurrent = yardsFromFeet
+                        print("⛳ Putt was \(feet)ft short (legacy), previous shot was \(String(format: "%.1f", yardsFromFeet))yds short of the hole.")
+                    } else {
+                        // Normal putt - holed it (ball ended at hole = 0 yards)
+                        effectiveCurrent = 0.0
+                        print("⛳ Normal putt: \(feet)ft - holed (ball at hole = 0yds)")
+                    }
                 }
             }
             
@@ -639,8 +882,14 @@ struct ShotTrackingView: View {
             }
             
             let traveled = Int(round(Double(prevRemaining) - effectiveCurrent))
-            prev.distanceTraveled = traveled
-            print("📏 Updated previous Shot #\(prev.shotNumber): \(prevRemaining)yds - \(effectiveCurrent)yds = \(traveled)yds")
+            // Ensure distance traveled is never negative (sanity check)
+            if traveled < 0 {
+                print("⚠️ Warning: Calculated negative distance traveled (\(traveled)yds). Using 0 instead.")
+                prev.distanceTraveled = 0
+            } else {
+                prev.distanceTraveled = traveled
+                print("📏 Updated previous Shot #\(prev.shotNumber): \(prevRemaining)yds - \(effectiveCurrent)yds = \(traveled)yds")
+            }
         }
         
         // Create and save the shot
@@ -658,7 +907,8 @@ struct ShotTrackingView: View {
             isRetaking: pending.isRetaking,
             isLong: pending.isLong,
             isShort: pending.isShort,
-            isInBunker: pending.isInBunker
+            isInBunker: pending.isInBunker,
+            overshootFeet: pending.overshootFeet
         )
         
         newShot.game = game
@@ -719,12 +969,23 @@ struct ShotTrackingView: View {
                 let nextShot = shots[index + 1]
                 if let currentDistance = shot.distanceToHole, let nextDistance = nextShot.distanceToHole {
                     let traveled = currentDistance - nextDistance
-                    // Only update if distanceTraveled is nil (hasn't been set with putt adjustments)
-                    if shot.distanceTraveled == nil {
-                        shot.distanceTraveled = traveled
-                        print("📏 Recalculated Shot #\(shot.shotNumber): \(currentDistance)yds - \(nextDistance)yds = \(traveled)yds")
+                    
+                    // Ensure distance traveled is never negative (sanity check)
+                    // Note: distanceToHole should already account for putt modifiers set during save
+                    if traveled < 0 {
+                        print("⚠️ Warning: Recalculated negative distance traveled (\(traveled)yds) for Shot #\(shot.shotNumber). Using 0 instead.")
+                        // Only update if distanceTraveled is nil (hasn't been set with putt adjustments)
+                        if shot.distanceTraveled == nil {
+                            shot.distanceTraveled = 0
+                        }
                     } else {
-                        print("📏 Skipping recalculation for Shot #\(shot.shotNumber) (already set with putt adjustment)")
+                        // Only update if distanceTraveled is nil (hasn't been set with putt adjustments)
+                        if shot.distanceTraveled == nil {
+                            shot.distanceTraveled = traveled
+                            print("📏 Recalculated Shot #\(shot.shotNumber): \(currentDistance)yds - \(nextDistance)yds = \(traveled)yds")
+                        } else {
+                            print("📏 Skipping recalculation for Shot #\(shot.shotNumber) (already set with putt adjustment)")
+                        }
                     }
                 }
             }

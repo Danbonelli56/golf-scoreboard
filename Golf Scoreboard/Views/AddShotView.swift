@@ -147,7 +147,8 @@ struct AddShotView: View {
             isRetaking: false,
             isLong: false,
             isShort: false,
-            isInBunker: false
+            isInBunker: false,
+            overshootFeet: nil
         )
         
         // Associate the shot with the current game

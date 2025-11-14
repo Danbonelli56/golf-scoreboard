@@ -36,10 +36,11 @@ final class Shot {
     var isLong: Bool = false // true if shot went long (past target)
     var isShort: Bool = false // true if shot came short (didn't reach target)
     var isInBunker: Bool = false // true if shot landed in a bunker/sand trap
+    var overshootFeet: Int? // for putts: positive if went long (past hole), negative if short (didn't reach hole), nil if holed or no overshoot specified
     
     init(player: Player? = nil, holeNumber: Int, shotNumber: Int, 
          distanceToHole: Int? = nil, originalDistanceFeet: Int? = nil, club: String? = nil, 
-         result: ShotResult = .straight, isPutt: Bool = false, distanceTraveled: Int? = nil, isPenalty: Bool = false, isRetaking: Bool = false, isLong: Bool = false, isShort: Bool = false, isInBunker: Bool = false) {
+         result: ShotResult = .straight, isPutt: Bool = false, distanceTraveled: Int? = nil, isPenalty: Bool = false, isRetaking: Bool = false, isLong: Bool = false, isShort: Bool = false, isInBunker: Bool = false, overshootFeet: Int? = nil) {
         self.player = player
         self.holeNumber = holeNumber
         self.shotNumber = shotNumber
@@ -54,6 +55,7 @@ final class Shot {
         self.isLong = isLong
         self.isShort = isShort
         self.isInBunker = isInBunker
+        self.overshootFeet = overshootFeet
         self.createdAt = Date()
     }
     
