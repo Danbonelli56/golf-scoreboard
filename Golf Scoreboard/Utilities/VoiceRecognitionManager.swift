@@ -70,6 +70,11 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
     }
     
     func startListening() async throws {
+        // Prevent starting if already listening
+        guard !isListening else {
+            return
+        }
+        
         // Request authorization if needed
         if authorizationStatus == .notDetermined {
             await requestAuthorization()
@@ -78,6 +83,9 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
         guard authorizationStatus == .authorized else {
             throw VoiceRecognitionError.notAuthorized
         }
+        
+        // Clean up any existing resources first
+        await cleanupResources()
         
         // Request microphone (record) permission if needed
         let audioSession = AVAudioSession.sharedInstance()
@@ -99,13 +107,18 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
             }
         }
         
-        // Cancel previous task if any
-        recognitionTask?.cancel()
-        recognitionTask = nil
+        // Check if speech recognizer is available
+        guard let recognizer = speechRecognizer, recognizer.isAvailable else {
+            throw VoiceRecognitionError.audioEngineError
+        }
         
         // Configure audio session
-        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        do {
+            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            throw VoiceRecognitionError.audioEngineError
+        }
         
         // Create engine and recognition request
         let audioEngine = AVAudioEngine()
@@ -121,29 +134,60 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
         }
         
         // Create recognition task
-        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+        recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+            guard let self = self else { return }
+            
             if let result = result {
                 Task { @MainActor in
-                    self?.recognizedText = result.bestTranscription.formattedString
+                    self.recognizedText = result.bestTranscription.formattedString
                 }
             }
             
             if let error = error {
+                // Check if error is cancellation (normal when stopping)
+                let nsError = error as NSError
+                let isCancelled = nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 216
+                let isServiceUnavailable = nsError.domain == "kAFAssistantErrorDomain" && nsError.code == 1101
+                
                 Task { @MainActor in
-                    self?.stopListening()
-                    self?.errorMessage = error.localizedDescription
+                    // Only stop and show error if it's not a cancellation
+                    if !isCancelled {
+                        // Check if we're still listening before stopping (to avoid spam)
+                        let wasListening = self.isListening
+                        
+                        // If service is unavailable, stop listening but don't show error repeatedly
+                        if isServiceUnavailable {
+                            if wasListening {
+                                self.stopListening()
+                                // Only show error once to avoid spam
+                                if self.errorMessage == nil {
+                                    self.errorMessage = "Speech recognition service unavailable"
+                                }
+                            }
+                        } else {
+                            if wasListening {
+                                self.stopListening()
+                                self.errorMessage = error.localizedDescription
+                            }
+                        }
+                    }
                 }
             }
         }
         
         // Configure audio engine
         let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            recognitionRequest.append(buffer)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak recognitionRequest] buffer, _ in
+            recognitionRequest?.append(buffer)
         }
         
-        audioEngine.prepare()
-        try audioEngine.start()
+        do {
+            audioEngine.prepare()
+            try audioEngine.start()
+        } catch {
+            await cleanupResources()
+            throw VoiceRecognitionError.audioEngineError
+        }
         
         await MainActor.run {
             self.isListening = true
@@ -151,12 +195,52 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
     }
     
     func stopListening() {
+        guard isListening else { return }
+        
+        isListening = false
+        
+        // Cancel recognition task first
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        
+        // Stop audio engine
         audioEngine?.stop()
         audioEngine?.inputNode.removeTap(onBus: 0)
+        
+        // End recognition request
         recognitionRequest?.endAudio()
         recognitionRequest = nil
         
-        isListening = false
+        // Deactivate audio session
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            // Ignore errors when deactivating
+        }
+        
+        // Clean up audio engine
+        audioEngine = nil
+    }
+    
+    private func cleanupResources() async {
+        await MainActor.run {
+            // Cancel any existing recognition task
+            recognitionTask?.cancel()
+            recognitionTask = nil
+            
+            // Stop and clean up audio engine
+            audioEngine?.stop()
+            audioEngine?.inputNode.removeTap(onBus: 0)
+            audioEngine = nil
+            
+            // End and clean up recognition request
+            recognitionRequest?.endAudio()
+            recognitionRequest = nil
+            
+            // Reset listening state
+            isListening = false
+        }
     }
     
     func reset() {

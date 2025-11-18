@@ -19,8 +19,9 @@ final class Game {
     var createdAt: Date?
     var selectedTeeColor: String? // Override tee color for this game
     var isCompleted: Bool = false // Whether the game is completed and archived
+    var trackingPlayerIDs: String? // IDs of players who are tracking shots (stored as comma-separated UUID strings for SwiftData compatibility)
     
-    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil) {
+    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil) {
         self.id = UUID()
         self.course = course
         self.date = date ?? Date()
@@ -28,12 +29,26 @@ final class Game {
         self.holesScores = []
         self.createdAt = nil
         self.selectedTeeColor = selectedTeeColor
+        // Convert UUID array to comma-separated string for SwiftData compatibility
+        self.trackingPlayerIDs = trackingPlayerIDs?.map { $0.uuidString }.joined(separator: ",")
     }
     
     // Computed properties for safe access to optional arrays
     var playersArray: [Player] { players ?? [] }
     var holesScoresArray: [HoleScore] { holesScores ?? [] }
     var shotsArray: [Shot] { shots ?? [] }
+    
+    // Convert comma-separated string back to UUID Set for use in code
+    var trackingPlayerIDsSet: Set<UUID> {
+        guard let idsString = trackingPlayerIDs, !idsString.isEmpty else { return [] }
+        return Set(idsString.split(separator: ",").compactMap { UUID(uuidString: String($0)) })
+    }
+    
+    // Get players who are tracking shots
+    var trackingPlayers: [Player] {
+        let trackingIDs = trackingPlayerIDsSet
+        return playersArray.filter { trackingIDs.contains($0.id) }
+    }
     
     // Check if game is completed (all 18 holes have scores for all players)
     var isGameCompleted: Bool {

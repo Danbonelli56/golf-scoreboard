@@ -34,3 +34,20 @@ final class Player {
     }
 }
 
+// Extension to sort players with current user first
+extension Array where Element == Player {
+    func sortedWithCurrentUserFirst() -> [Player] {
+        return self.sorted { player1, player2 in
+            // Current user always comes first
+            if player1.isCurrentUser && !player2.isCurrentUser {
+                return true
+            }
+            if !player1.isCurrentUser && player2.isCurrentUser {
+                return false
+            }
+            // If both are current user or neither is, maintain original order (or sort by name)
+            return player1.name < player2.name
+        }
+    }
+}
+

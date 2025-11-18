@@ -97,7 +97,7 @@ struct GameScorecardView: View {
                         .font(.caption)
                         .fontWeight(.semibold)
                         
-                        ForEach(game.playersArray) { player in
+                        ForEach(game.playersArray.sortedWithCurrentUserFirst()) { player in
                             Text(displayName(for: player))
                             .frame(maxWidth: .infinity)
                             .font(.caption)
@@ -153,7 +153,7 @@ struct HoleScoreRow: View {
                 .foregroundColor(.secondary)
             
             // Player scores (gross and net)
-            ForEach(game.playersArray) { player in
+            ForEach(game.playersArray.sortedWithCurrentUserFirst()) { player in
                 let gross = getScore(for: player)
                 let net = gross != nil ? game.netScoreForHole(player: player, holeNumber: holeNumber) : nil
                 

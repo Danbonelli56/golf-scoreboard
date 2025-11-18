@@ -18,7 +18,7 @@ struct StatisticsChartView: View {
     
     var body: some View {
         List {
-            ForEach(players) { player in
+            ForEach(players.sortedWithCurrentUserFirst()) { player in
                 Section(header: Text(player.name).font(.headline)) {
                     PlayerChartsSection(
                         player: player,

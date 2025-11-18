@@ -10,9 +10,10 @@ import SwiftData
 
 struct MainTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @State private var selectedTab = 0
     
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             ScorecardView()
                 .tabItem {
                     Label("Scorecard", systemImage: "list.bullet.rectangle")
@@ -38,7 +39,16 @@ struct MainTabView: View {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .navigateToScorecard)) { _ in
+            // Navigate to scorecard tab (index 0)
+            selectedTab = 0
+        }
     }
+}
+
+// Notification for navigating to scorecard
+extension Notification.Name {
+    static let navigateToScorecard = Notification.Name("navigateToScorecard")
 }
 
 #Preview {

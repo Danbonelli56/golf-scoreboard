@@ -110,7 +110,7 @@ struct ShotStatisticsView: View {
                 TabView(selection: $selectedTab) {
                     // Summary View
                     List {
-                        ForEach(players) { player in
+                        ForEach(players.sortedWithCurrentUserFirst()) { player in
                             Section(header: Text(player.name).font(.headline)) {
                                 let stats = ShotStatistics.calculateStatistics(for: player, shots: validShots)
                                 let overall = ShotStatistics.getOverallStats(for: player, shots: validShots)

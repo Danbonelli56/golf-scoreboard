@@ -108,11 +108,14 @@ struct ShotTrackingView: View {
                 // Main content
                 if let game = selectedGame {
                     let gameID = game.id
-                    let players = game.playersArray
+                    // Filter to only show tracking players
+                    let trackingPlayers = game.trackingPlayers.sortedWithCurrentUserFirst()
+                    let allPlayers = game.playersArray.sortedWithCurrentUserFirst()
+                    let displayPlayers = trackingPlayers.isEmpty ? allPlayers : trackingPlayers
                     let course = game.course
                     let holesScores = game.holesScoresArray
-                    GameShotsView(gameID: gameID, players: players, selectedHole: $currentHole, course: course, holesScores: holesScores, shots: shots, onAddShot: {
-                        selectedPlayer = players.first
+                    GameShotsView(gameID: gameID, players: displayPlayers, selectedHole: $currentHole, course: course, holesScores: holesScores, shots: shots, onAddShot: {
+                        selectedPlayer = displayPlayers.first
                         showingShotEntry = true
                     }, listening: listening, onToggleMicrophone: {
                         toggleMicAction?()
@@ -395,7 +398,61 @@ struct ShotTrackingView: View {
             distance = Int(String(lowerText[distRange]))
             print("✅ Found distance: \(distance!)")
         }
-        // Pattern 2a: "X feet left/right [and] Y feet long/short" - direction + initial distance + overshoot
+        // Pattern 2a: "X feet to the hole Y feet long/short" OR "X feet long/short Y feet to hole" - initial distance + overshoot without direction
+        // Examples: "20 feet to the hole 10 feet long" OR "10 feet long 20 feet to hole" OR "15 feet to the hole 5 feet short"
+        if distance == nil {
+            // Try "X feet to hole Y feet long/short" first
+            if let toHoleWithOvershootPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(?:feet|foot|ft)\\s+to\\s+(?:the\\s+)?hole\\s+(\\d+)\\s*(?:feet|foot|ft)\\s+(long|short)", options: .caseInsensitive),
+               let match = toHoleWithOvershootPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)) {
+                if match.numberOfRanges > 1, let initialRange = Range(match.range(at: 1), in: lowerText),
+                   let initialFeet = Int(String(lowerText[initialRange])) {
+                    distanceFeet = initialFeet
+                    let yards = Int(round(Double(initialFeet) / 3.0))
+                    distance = yards
+                    print("✅ Found initial distance (feet to hole): \(initialFeet)ft -> ~\(yards)yds")
+                }
+                if match.numberOfRanges > 2, let overshootRange = Range(match.range(at: 2), in: lowerText),
+                   let overshoot = Int(String(lowerText[overshootRange])) {
+                    if match.numberOfRanges > 3, let directionRange = Range(match.range(at: 3), in: lowerText) {
+                        let direction = String(lowerText[directionRange]).lowercased()
+                        if direction.contains("long") {
+                            overshootFeet = overshoot
+                            print("✅ Found overshoot (to hole pattern): \(overshoot)ft long")
+                        } else if direction.contains("short") {
+                            overshootFeet = -overshoot
+                            print("✅ Found undershoot (to hole pattern): \(overshoot)ft short")
+                        }
+                    }
+                }
+            }
+            // Try "X feet long/short Y feet to hole" (reversed order)
+            else if let reversedPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(?:feet|foot|ft)\\s+(long|short)\\s+(\\d+)\\s*(?:feet|foot|ft)\\s+to\\s+(?:the\\s+)?hole", options: .caseInsensitive),
+                    let match = reversedPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)) {
+                // First capture is overshoot, second is direction, third is initial distance
+                if match.numberOfRanges > 1, let overshootRange = Range(match.range(at: 1), in: lowerText),
+                   let overshoot = Int(String(lowerText[overshootRange])) {
+                    if match.numberOfRanges > 2, let directionRange = Range(match.range(at: 2), in: lowerText) {
+                        let direction = String(lowerText[directionRange]).lowercased()
+                        if direction.contains("long") {
+                            overshootFeet = overshoot
+                            print("✅ Found overshoot (reversed pattern): \(overshoot)ft long")
+                        } else if direction.contains("short") {
+                            overshootFeet = -overshoot
+                            print("✅ Found undershoot (reversed pattern): \(overshoot)ft short")
+                        }
+                    }
+                }
+                if match.numberOfRanges > 3, let initialRange = Range(match.range(at: 3), in: lowerText),
+                   let initialFeet = Int(String(lowerText[initialRange])) {
+                    distanceFeet = initialFeet
+                    let yards = Int(round(Double(initialFeet) / 3.0))
+                    distance = yards
+                    print("✅ Found initial distance (reversed pattern): \(initialFeet)ft -> ~\(yards)yds")
+                }
+            }
+        }
+        
+        // Pattern 2b: "X feet left/right [and] Y feet long/short" - direction + initial distance + overshoot
         // Examples: "10 feet left and 2 feet long" OR "30 feet left 4 feet long" (without "and")
         // This pattern matches: [distance] feet [direction] [optional "and"] [overshoot] feet [long/short]
         if distance == nil {
@@ -451,10 +508,10 @@ struct ShotTrackingView: View {
         
         // Pattern 2b: "X foot long" or "X feet long" - implies BOTH initial distance AND overshoot are X
         // Example: "20 foot long" means 20 feet to hole AND went 20 feet long
-        // IMPORTANT: Only match if there's NO other distance mentioned before it (to avoid matching "30 feet left 4 feet long")
+        // IMPORTANT: Only match if there's NO other distance mentioned before it (to avoid matching "30 feet left 4 feet long" or "20 feet to the hole 10 feet long")
         if distance == nil {
             // Check if there's another distance before "X feet long"
-            let hasOtherDistanceBefore = lowerText.range(of: "\\d+\\s*(?:feet|foot|ft)\\s+(?:left|right|straight)", options: [.regularExpression, .caseInsensitive]) != nil
+            let hasOtherDistanceBefore = lowerText.range(of: "\\d+\\s*(?:feet|foot|ft)\\s+(?:left|right|straight|to\\s+(?:the\\s+)?hole)", options: [.regularExpression, .caseInsensitive]) != nil
             
             if !hasOtherDistanceBefore, let sameValuePattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(?:feet|foot|ft)\\s+long", options: .caseInsensitive),
                let match = sameValuePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
@@ -469,10 +526,10 @@ struct ShotTrackingView: View {
         }
         
         // Pattern 2c: "X foot short" or "X feet short" - implies BOTH initial distance AND undershoot are X
-        // IMPORTANT: Only match if there's NO other distance mentioned before it
+        // IMPORTANT: Only match if there's NO other distance mentioned before it (to avoid matching "20 feet to the hole 10 feet short")
         if distance == nil {
             // Check if there's another distance before "X feet short"
-            let hasOtherDistanceBefore = lowerText.range(of: "\\d+\\s*(?:feet|foot|ft)\\s+(?:left|right|straight)", options: [.regularExpression, .caseInsensitive]) != nil
+            let hasOtherDistanceBefore = lowerText.range(of: "\\d+\\s*(?:feet|foot|ft)\\s+(?:left|right|straight|to\\s+(?:the\\s+)?hole)", options: [.regularExpression, .caseInsensitive]) != nil
             
             if !hasOtherDistanceBefore, let sameValueShortPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(?:feet|foot|ft)\\s+short", options: .caseInsensitive),
                let match = sameValueShortPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
@@ -487,15 +544,21 @@ struct ShotTrackingView: View {
         }
         
         // Pattern 2d: feet for putts ("10 feet", "12 ft") - simple case without overshoot
-        if distance == nil, let feetPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(feet|foot|ft)", options: .caseInsensitive),
-           let match = feetPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
-           let feetRange = Range(match.range(at: 1), in: lowerText),
-           let feet = Int(String(lowerText[feetRange])) {
-            distanceFeet = feet
-            // Store internally as yards (rounded)
-            let yards = Int(round(Double(feet) / 3.0))
-            distance = yards
-            print("✅ Found distance (feet): \(feet)ft -> ~\(yards)yds")
+        // IMPORTANT: Don't match if this is part of "X feet to the hole Y feet long/short" pattern
+        if distance == nil {
+            // Check if this matches the "to the hole" pattern with overshoot - if so, skip simple pattern
+            let hasToHoleWithOvershoot = lowerText.range(of: "\\d+\\s*(?:feet|foot|ft)\\s+to\\s+(?:the\\s+)?hole\\s+\\d+\\s*(?:feet|foot|ft)\\s+(long|short)", options: [.regularExpression, .caseInsensitive]) != nil
+            
+            if !hasToHoleWithOvershoot, let feetPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(feet|foot|ft)", options: .caseInsensitive),
+               let match = feetPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+               let feetRange = Range(match.range(at: 1), in: lowerText),
+               let feet = Int(String(lowerText[feetRange])) {
+                distanceFeet = feet
+                // Store internally as yards (rounded)
+                let yards = Int(round(Double(feet) / 3.0))
+                distance = yards
+                print("✅ Found distance (feet): \(feet)ft -> ~\(yards)yds")
+            }
         }
         // Pattern 3: "228 to hole" or "to hole 228" - distance to hole
         if distance == nil, let toHolePattern = try? NSRegularExpression(pattern: "(\\d+)\\s+to\\s+(?:the\\s+)?hole|to\\s+(?:the\\s+)?hole\\s+(\\d+)\\s*(?:yards?|yds?)?", options: .caseInsensitive),
@@ -842,13 +905,15 @@ struct ShotTrackingView: View {
                 // If overshootFeet is provided, use it for more accurate calculation
                 if let overshoot = pending.overshootFeet {
                     // overshootFeet: positive = went long (past hole), negative = stopped short
-                    // effectiveCurrent should be where the ball ended relative to the hole
+                    // effectiveCurrent should be the distance remaining to the hole (positive = short of hole, negative = past hole)
                     let overshootYards = Double(overshoot) / 3.0
-                    effectiveCurrent = overshootYards
+                    // Negate because: if overshoot is negative (stopped short), effectiveCurrent should be positive (distance remaining)
+                    // If overshoot is positive (went long), effectiveCurrent should be negative (past the hole)
+                    effectiveCurrent = -overshootYards
                     if overshoot > 0 {
-                        print("⛳ Putt was \(feet)ft, went \(overshoot)ft long. Ball ended \(String(format: "%.1f", overshootYards))yds past hole.")
+                        print("⛳ Putt was \(feet)ft, went \(overshoot)ft long. Ball ended \(String(format: "%.1f", overshootYards))yds past hole. Effective current: \(String(format: "%.1f", effectiveCurrent))yds")
                     } else {
-                        print("⛳ Putt was \(feet)ft, stopped \(abs(overshoot))ft short. Ball ended \(String(format: "%.1f", abs(overshootYards)))yds short of hole.")
+                        print("⛳ Putt was \(feet)ft, stopped \(abs(overshoot))ft short. Ball ended \(String(format: "%.1f", abs(overshootYards)))yds short of hole. Effective current: \(String(format: "%.1f", effectiveCurrent))yds")
                     }
                 } else {
                     // No overshoot specified - use legacy logic
@@ -924,8 +989,89 @@ struct ShotTrackingView: View {
             }
             
             NotificationCenter.default.post(name: .shotsUpdated, object: nil)
+            
+            // Check if this shot is holed (putt with distanceToHole = 0 or no overshootFeet)
+            let isHoled = checkIfShotIsHoled(shot: newShot, game: game)
+            
+            if isHoled {
+                // Check if all tracking players have holed out on this hole
+                checkIfAllTrackingPlayersHoledOut(game: game, holeNumber: holeNum)
+            }
         } catch {
             print("❌ Error saving shot: \(error)")
+        }
+    }
+    
+    // Check if a shot is holed (putt that went in)
+    private func checkIfShotIsHoled(shot: Shot, game: Game) -> Bool {
+        guard shot.isPutt else { return false }
+        
+        // Shot is holed if:
+        // 1. distanceToHole is 0 (ball ended at the hole)
+        if let distanceToHole = shot.distanceToHole, distanceToHole == 0 {
+            return true
+        }
+        
+        // 2. distanceTraveled is 0 and it's a putt (final putt that went in)
+        // Note: This is set when finalizeHoleScore is called
+        if shot.distanceTraveled == 0 && shot.isPutt {
+            return true
+        }
+        
+        // 3. Check if there's a hole score for this player on this hole (indicates they finished)
+        // This means finalizeHoleScore was called, so the putt went in
+        if let player = shot.player,
+           let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == shot.holeNumber }),
+           holeScore.scores[player.id] != nil {
+            // Player has a score for this hole, so they must have holed out
+            return true
+        }
+        
+        // 4. Putt with originalDistanceFeet set but no overshootFeet and no long/short flags
+        // This indicates a normal putt that went in (not long/short)
+        // Note: This is a heuristic - a putt with no modifiers is assumed to go in if it's the last shot
+        if shot.originalDistanceFeet != nil && shot.overshootFeet == nil && !shot.isLong && !shot.isShort {
+            // This is a normal putt - if it has no modifiers and is a putt, it likely went in
+            // We'll be conservative and only mark as holed if distanceToHole is explicitly 0
+            // or if there's a hole score (handled above)
+            // This case is mainly for when the user says "10 feet" without modifiers
+        }
+        
+        return false
+    }
+    
+    // Check if all tracking players have holed out on the current hole
+    private func checkIfAllTrackingPlayersHoledOut(game: Game, holeNumber: Int) {
+        let trackingPlayers = game.trackingPlayers
+        guard !trackingPlayers.isEmpty else { return }
+        
+        let gameID = game.id
+        
+        // Check each tracking player to see if they've holed out
+        var allHoledOut = true
+        for player in trackingPlayers {
+            let playerShots = shots.filter {
+                guard let shotGameID = $0.game?.id else { return false }
+                return shotGameID == gameID && $0.player?.id == player.id && $0.holeNumber == holeNumber
+            }.sorted { $0.shotNumber < $1.shotNumber }
+            
+            // Check if the last shot is holed
+            if let lastShot = playerShots.last {
+                if !checkIfShotIsHoled(shot: lastShot, game: game) {
+                    allHoledOut = false
+                    break
+                }
+            } else {
+                // Player hasn't taken any shots on this hole yet
+                allHoledOut = false
+                break
+            }
+        }
+        
+        if allHoledOut {
+            print("✅ All tracking players have holed out on hole \(holeNumber). Navigating to scorecard.")
+            // Navigate to scorecard tab
+            NotificationCenter.default.post(name: .navigateToScorecard, object: nil)
         }
     }
     
@@ -950,6 +1096,9 @@ struct ShotTrackingView: View {
                 let totalShots = playerShotsThisHole.map { $0.shotNumber }.max() ?? 0
                 finalizeHoleScore(for: player, on: currentHole, shotsCount: totalShots)
                 pendingShot = nil // Clear pending shot
+                
+                // Check if all tracking players have holed out
+                checkIfAllTrackingPlayersHoledOut(game: game, holeNumber: currentHole)
             }
         }
     }

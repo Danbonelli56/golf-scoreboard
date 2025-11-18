@@ -21,6 +21,7 @@ struct GameSetupView: View {
     
     @State private var selectedCourse: GolfCourse?
     @State private var selectedPlayers: Set<UUID> = []
+    @State private var trackingPlayers: Set<UUID> = []
     @State private var selectedTeeColor: String? = nil
     
     private var availableTeeColors: [String] {
@@ -115,6 +116,8 @@ struct GameSetupView: View {
                             Button {
                                 if selectedPlayers.contains(player.id) {
                                     selectedPlayers.remove(player.id)
+                                    // Also remove from tracking if deselected
+                                    trackingPlayers.remove(player.id)
                                 } else {
                                     selectedPlayers.insert(player.id)
                                 }
@@ -136,12 +139,56 @@ struct GameSetupView: View {
                         AddPlayerView()
                     }
                 }
+                
+                // Shot Tracking section (only show when players are selected)
+                if !selectedPlayers.isEmpty {
+                    Section("Shot Tracking") {
+                        Text("Select which players will track their shots. Other players' scores can be entered manually on the scorecard.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        ForEach(players.filter { selectedPlayers.contains($0.id) }) { player in
+                            Button {
+                                if trackingPlayers.contains(player.id) {
+                                    trackingPlayers.remove(player.id)
+                                } else {
+                                    trackingPlayers.insert(player.id)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(player.name)
+                                    Spacer()
+                                    if trackingPlayers.contains(player.id) {
+                                        Image(systemName: "target")
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Image(systemName: "target")
+                                            .foregroundColor(.gray.opacity(0.3))
+                                    }
+                                }
+                            }
+                            .foregroundColor(.primary)
+                        }
+                    }
+                }
             }
             .onAppear {
                 // Initialize tee selection if course is already selected
                 if selectedCourse != nil && selectedTeeColor == nil && !availableTeeColors.isEmpty {
                     selectedTeeColor = defaultTeeColor
                 }
+                // Default tracking players to current user if available
+                if trackingPlayers.isEmpty, let currentUser = players.first(where: { $0.isCurrentUser }) {
+                    trackingPlayers.insert(currentUser.id)
+                }
+            }
+            .onChange(of: selectedPlayers) { oldValue, newValue in
+                // When players are selected, default tracking to current user if available
+                if trackingPlayers.isEmpty, let currentUser = players.first(where: { $0.isCurrentUser }), newValue.contains(currentUser.id) {
+                    trackingPlayers.insert(currentUser.id)
+                }
+                // Remove tracking for players who are no longer selected
+                trackingPlayers = trackingPlayers.filter { newValue.contains($0) }
             }
             .navigationTitle("New Game")
             .navigationBarTitleDisplayMode(.inline)
@@ -191,7 +238,15 @@ struct GameSetupView: View {
             return nil
         }()
         
-        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse)
+        // Get tracking player IDs (default to current user if none selected)
+        let trackingPlayerIDsArray: [UUID] = {
+            if trackingPlayers.isEmpty, let currentUser = selectedPlayersArray.first(where: { $0.isCurrentUser }) {
+                return [currentUser.id]
+            }
+            return Array(trackingPlayers)
+        }()
+        
+        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse, trackingPlayerIDs: trackingPlayerIDsArray)
         
         // Only one game can be active at a time
         modelContext.insert(newGame)
