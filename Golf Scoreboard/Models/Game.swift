@@ -19,7 +19,9 @@ final class Game {
     var createdAt: Date?
     var selectedTeeColor: String? // Override tee color for this game
     var isCompleted: Bool = false // Whether the game is completed and archived
-    var trackingPlayerIDs: String? // IDs of players who are tracking shots (stored as comma-separated UUID strings for SwiftData compatibility)
+    // Use new property name to avoid CloudKit conflict with old binary data
+    // Old CloudKit records have "trackingPlayerIDs" as binary data, so we use a new name
+    var trackingPlayerIDs_v2: String? // IDs of players who are tracking shots (stored as comma-separated UUID strings)
     
     init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil) {
         self.id = UUID()
@@ -30,7 +32,7 @@ final class Game {
         self.createdAt = nil
         self.selectedTeeColor = selectedTeeColor
         // Convert UUID array to comma-separated string for SwiftData compatibility
-        self.trackingPlayerIDs = trackingPlayerIDs?.map { $0.uuidString }.joined(separator: ",")
+        self.trackingPlayerIDs_v2 = trackingPlayerIDs?.map { $0.uuidString }.joined(separator: ",")
     }
     
     // Computed properties for safe access to optional arrays
@@ -38,9 +40,16 @@ final class Game {
     var holesScoresArray: [HoleScore] { holesScores ?? [] }
     var shotsArray: [Shot] { shots ?? [] }
     
+    // Convenience property for backward compatibility - wraps trackingPlayerIDs_v2
+    // This allows existing code to continue working while CloudKit syncs the new property name
+    var trackingPlayerIDs: String? {
+        get { trackingPlayerIDs_v2 }
+        set { trackingPlayerIDs_v2 = newValue }
+    }
+    
     // Convert comma-separated string back to UUID Set for use in code
     var trackingPlayerIDsSet: Set<UUID> {
-        guard let idsString = trackingPlayerIDs, !idsString.isEmpty else { return [] }
+        guard let idsString = trackingPlayerIDs_v2, !idsString.isEmpty else { return [] }
         return Set(idsString.split(separator: ",").compactMap { UUID(uuidString: String($0)) })
     }
     

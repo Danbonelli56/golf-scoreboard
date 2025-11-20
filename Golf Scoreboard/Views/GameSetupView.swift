@@ -57,7 +57,13 @@ struct GameSetupView: View {
             Form {
                 Section("Quick Import") {
                     NavigationLink {
-                        CalendarImportView(selectedGameIDString: $selectedGameIDString)
+                        CalendarImportView(
+                            selectedGameIDString: $selectedGameIDString,
+                            onGameCreated: {
+                                // Dismiss this view when a game is created from calendar
+                                dismiss()
+                            }
+                        )
                     } label: {
                         HStack {
                             Image(systemName: "calendar")

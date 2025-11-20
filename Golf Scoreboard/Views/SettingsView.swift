@@ -7,16 +7,19 @@
 
 import SwiftUI
 import SwiftData
+import CloudKit
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var courses: [GolfCourse]
     @Query private var players: [Player]
+    @Query private var games: [Game]
     
     @State private var showingAddCourse = false
     @State private var showingAddPlayer = false
     @State private var editingCourse: GolfCourse?
     @State private var editingPlayer: Player?
+    @State private var cloudKitStatus: String = "Checking..."
     
     var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
@@ -125,6 +128,52 @@ struct SettingsView: View {
                 } header: {
                     Text("App Information")
                 }
+                
+                Section {
+                    HStack {
+                        Text("Total Games")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(games.count)")
+                            .fontWeight(.medium)
+                    }
+                    
+                    HStack {
+                        Text("CloudKit Status")
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(cloudKitStatus)
+                            .fontWeight(.medium)
+                            .foregroundColor(cloudKitStatus.contains("Available") ? .green : .orange)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !cloudKitStatus.contains("Available") {
+                            Text("CloudKit Sync Issues:")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            
+                            Text("• Ensure both devices use the same Apple ID")
+                                .font(.caption)
+                            Text("• Enable iCloud Drive in Settings")
+                                .font(.caption)
+                            Text("• Check internet connection on both devices")
+                                .font(.caption)
+                        }
+                        
+                        Text("Schema Migration Issue:")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.orange)
+                        
+                        Text("If sync fails with 'trackingPlayerIDs' errors, CloudKit has old schema records. Reset the CloudKit container in Xcode → Window → CloudKit Dashboard → Select container → Schema → Reset Development Schema (or delete old records).")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("Data Sync")
+                }
             }
             .navigationTitle("Settings")
         }
@@ -138,8 +187,37 @@ struct SettingsView: View {
         .sheet(isPresented: $showingAddPlayer) {
             AddPlayerView()
         }
-        .sheet(item: $editingPlayer) { player in
+            .sheet(item: $editingPlayer) { player in
             EditPlayerView(player: player)
+        }
+        .onAppear {
+            checkCloudKitStatus()
+        }
+    }
+    
+    private func checkCloudKitStatus() {
+        let container = CKContainer(identifier: "iCloud.DJB.Golf-Scoreboard")
+        container.accountStatus { status, error in
+            DispatchQueue.main.async {
+                switch status {
+                case .available:
+                    cloudKitStatus = "Available"
+                case .noAccount:
+                    cloudKitStatus = "No iCloud Account"
+                case .restricted:
+                    cloudKitStatus = "Restricted"
+                case .couldNotDetermine:
+                    cloudKitStatus = "Unknown"
+                case .temporarilyUnavailable:
+                    cloudKitStatus = "Temporarily Unavailable"
+                @unknown default:
+                    cloudKitStatus = "Unknown"
+                }
+                
+                if let error = error {
+                    cloudKitStatus = "Error: \(error.localizedDescription)"
+                }
+            }
         }
     }
     

@@ -22,6 +22,7 @@ struct CalendarImportView: View {
     
     @Binding var selectedGameIDString: String
     @AppStorage("currentHole") private var currentHole: Int = 1
+    var onGameCreated: (() -> Void)? = nil
     
     var body: some View {
         NavigationView {
@@ -80,8 +81,8 @@ struct CalendarImportView: View {
                                     event: event,
                                     courses: courses,
                                     players: players,
-                                    onImport: { [self] course, selectedPlayers in
-                                        importGame(course: course, players: selectedPlayers, event: event)
+                                    onImport: { [self] course, selectedPlayers, trackingPlayerIDs in
+                                        importGame(course: course, players: selectedPlayers, trackingPlayerIDs: trackingPlayerIDs, event: event)
                                     }
                                 )
                             }
@@ -125,7 +126,7 @@ struct CalendarImportView: View {
         golfEvents = await calendarManager.searchGolfEvents()
     }
     
-    func importGame(course: GolfCourse, players: [Player], event: GolfCalendarEvent) {
+    func importGame(course: GolfCourse, players: [Player], trackingPlayerIDs: [UUID], event: GolfCalendarEvent) {
         // Use default tee color logic (same as GameSetupView)
         let defaultTeeColor: String? = {
             if let currentUser = players.first(where: { $0.isCurrentUser }),
@@ -146,7 +147,15 @@ struct CalendarImportView: View {
             return availableTeeColors.first
         }()
         
-        let newGame = Game(course: course, players: players, selectedTeeColor: defaultTeeColor)
+        // Default to current user if no tracking players specified
+        let trackingPlayerIDsToUse: [UUID] = {
+            if trackingPlayerIDs.isEmpty, let currentUser = players.first(where: { $0.isCurrentUser }) {
+                return [currentUser.id]
+            }
+            return trackingPlayerIDs
+        }()
+        
+        let newGame = Game(course: course, players: players, selectedTeeColor: defaultTeeColor, trackingPlayerIDs: trackingPlayerIDsToUse)
         
         modelContext.insert(newGame)
         
@@ -154,7 +163,8 @@ struct CalendarImportView: View {
             try modelContext.save()
             selectedGameIDString = newGame.id.uuidString
             currentHole = 1
-            dismiss()
+            // Dismiss the parent GameSetupView, which will also dismiss this view
+            onGameCreated?()
         } catch {
             print("Error saving imported game: \(error)")
         }
@@ -165,7 +175,7 @@ struct CalendarEventRow: View {
     let event: GolfCalendarEvent
     let courses: [GolfCourse]
     let players: [Player]
-    let onImport: (GolfCourse, [Player]) -> Void
+    let onImport: (GolfCourse, [Player], [UUID]) -> Void
     
     @State private var showingImportSheet = false
     @State private var matchedCourse: GolfCourse?
@@ -209,14 +219,14 @@ struct CalendarEventRow: View {
         }
         .padding(.vertical, 4)
         .sheet(isPresented: $showingImportSheet) {
-            CalendarImportConfirmationView(
+                                CalendarImportConfirmationView(
                 event: event,
                 matchedCourse: matchedCourse,
                 matchedPlayers: matchedPlayers,
                 allCourses: courses,
                 allPlayers: players,
-                onConfirm: { course, selectedPlayers in
-                    onImport(course, selectedPlayers)
+                onConfirm: { course, selectedPlayers, trackingPlayers in
+                    onImport(course, selectedPlayers, trackingPlayers)
                     showingImportSheet = false
                 },
                 onCancel: {
@@ -518,11 +528,12 @@ struct CalendarImportConfirmationView: View {
     let matchedPlayers: [Player]
     let allCourses: [GolfCourse]
     let allPlayers: [Player]
-    let onConfirm: (GolfCourse, [Player]) -> Void
+    let onConfirm: (GolfCourse, [Player], [UUID]) -> Void
     let onCancel: () -> Void
     
     @State private var selectedCourse: GolfCourse?
     @State private var selectedPlayers: Set<UUID> = []
+    @State private var trackingPlayers: Set<UUID> = []
     
     var body: some View {
         NavigationView {
@@ -582,6 +593,8 @@ struct CalendarImportConfirmationView: View {
                         Button {
                             if selectedPlayers.contains(player.id) {
                                 selectedPlayers.remove(player.id)
+                                // Also remove from tracking if deselected
+                                trackingPlayers.remove(player.id)
                             } else {
                                 selectedPlayers.insert(player.id)
                             }
@@ -596,6 +609,38 @@ struct CalendarImportConfirmationView: View {
                             }
                         }
                         .foregroundColor(.primary)
+                    }
+                }
+                
+                // Shot Tracking section (only show when players are selected)
+                if !selectedPlayers.isEmpty {
+                    Section("Shot Tracking") {
+                        Text("Select which players will track their shots. Other players' scores can be entered manually on the scorecard.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        ForEach(allPlayers.filter { selectedPlayers.contains($0.id) }) { player in
+                            Button {
+                                if trackingPlayers.contains(player.id) {
+                                    trackingPlayers.remove(player.id)
+                                } else {
+                                    trackingPlayers.insert(player.id)
+                                }
+                            } label: {
+                                HStack {
+                                    Text(player.name)
+                                    Spacer()
+                                    if trackingPlayers.contains(player.id) {
+                                        Image(systemName: "target")
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Image(systemName: "target")
+                                            .foregroundColor(.gray.opacity(0.3))
+                                    }
+                                }
+                            }
+                            .foregroundColor(.primary)
+                        }
                     }
                 }
                 
@@ -623,7 +668,8 @@ struct CalendarImportConfirmationView: View {
                 trailing: Button("Create Game") {
                     if let course = selectedCourse {
                         let playersArray = allPlayers.filter { selectedPlayers.contains($0.id) }
-                        onConfirm(course, playersArray)
+                        let trackingPlayerIDsArray = Array(trackingPlayers)
+                        onConfirm(course, playersArray, trackingPlayerIDsArray)
                     }
                 }
                 .disabled(selectedCourse == nil || selectedPlayers.isEmpty)
@@ -645,6 +691,11 @@ struct CalendarImportConfirmationView: View {
                         selectedPlayers.insert(matched.id)
                     }
                 }
+                
+                // Default tracking players to current user if available
+                if trackingPlayers.isEmpty, let currentUser = allPlayers.first(where: { $0.isCurrentUser }), selectedPlayers.contains(currentUser.id) {
+                    trackingPlayers.insert(currentUser.id)
+                }
             }
             .onChange(of: matchedCourse) { oldValue, newValue in
                 // Update selected course when matched course changes
@@ -657,6 +708,14 @@ struct CalendarImportConfirmationView: View {
                 for player in newValue {
                     selectedPlayers.insert(player.id)
                 }
+            }
+            .onChange(of: selectedPlayers) { oldValue, newValue in
+                // When players are selected, default tracking to current user if available
+                if trackingPlayers.isEmpty, let currentUser = allPlayers.first(where: { $0.isCurrentUser }), newValue.contains(currentUser.id) {
+                    trackingPlayers.insert(currentUser.id)
+                }
+                // Remove tracking for players who are no longer selected
+                trackingPlayers = trackingPlayers.filter { newValue.contains($0) }
             }
         }
     }

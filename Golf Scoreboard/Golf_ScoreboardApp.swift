@@ -36,26 +36,33 @@ struct Golf_ScoreboardApp: App {
             // After successful container creation, validate and migrate existing data if needed
             // Note: SwiftData doesn't support automatic schema migrations for type changes
             // Existing games with old trackingPlayerIDs format will need to be handled
+            // IMPORTANT: CloudKit may have records with trackingPlayerIDs as binary data (old format)
+            // We need to handle this gracefully to prevent sync failures
             let allGames = try? container.mainContext.fetch(FetchDescriptor<Game>())
             if let games = allGames {
                 var needsSave = false
                 for game in games {
                     // Validate trackingPlayerIDs format (should be comma-separated UUID strings)
+                    // This helps clean up any local data, but can't fix CloudKit records with binary data
                     if let ids = game.trackingPlayerIDs, !ids.isEmpty {
-                        // Check if it's a valid comma-separated string format
                         let parts = ids.split(separator: ",")
                         let isValid = parts.allSatisfy { UUID(uuidString: String($0)) != nil }
+                        
                         if !isValid {
                             // Invalid format - clear it (will be set correctly on next game creation)
-                            print("⚠️ Found invalid trackingPlayerIDs format, clearing: \(ids)")
+                            print("⚠️ Found invalid trackingPlayerIDs format, clearing: \(ids.prefix(50))...")
                             game.trackingPlayerIDs = nil
                             needsSave = true
                         }
                     }
                 }
                 if needsSave {
-                    try? container.mainContext.save()
-                    print("✅ Migrated trackingPlayerIDs format")
+                    do {
+                        try container.mainContext.save()
+                        print("✅ Migrated trackingPlayerIDs format - CloudKit sync should now work")
+                    } catch {
+                        print("⚠️ Error saving migrated trackingPlayerIDs: \(error)")
+                    }
                 }
             }
             
@@ -132,10 +139,14 @@ struct Golf_ScoreboardApp: App {
         } catch {
             // Schema migration error - SwiftData doesn't support automatic migrations for type changes
             // The trackingPlayerIDs property was changed from [String]? to String?
-            // This requires resetting the database
+            // CloudKit may have records with old binary format that can't be automatically converted
             print("❌ ModelContainer creation failed: \(error)")
-            print("⚠️ This is likely due to a schema change (trackingPlayerIDs type changed)")
-            print("💡 Solution: Delete the app and reinstall, or clear app data in Settings")
+            print("⚠️ This is likely due to CloudKit sync error (trackingPlayerIDs schema mismatch)")
+            print("⚠️ CloudKit has records with trackingPlayerIDs as binary data (old format)")
+            print("⚠️ But the app expects String format (new format)")
+            print("💡 Solution 1: Reset CloudKit container in CloudKit Dashboard")
+            print("💡 Solution 2: Delete and reinstall the app on all devices")
+            print("💡 Solution 3: Wait and let CloudKit eventually sync corrected records")
             
             // For development: you can also delete the database file manually
             // The database is stored in the app's container
