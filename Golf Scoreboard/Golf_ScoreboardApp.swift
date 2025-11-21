@@ -38,6 +38,60 @@ struct Golf_ScoreboardApp: App {
             // Existing games with old trackingPlayerIDs format will need to be handled
             // IMPORTANT: CloudKit may have records with trackingPlayerIDs as binary data (old format)
             // We need to handle this gracefully to prevent sync failures
+            
+            // Clean up duplicate players by name (case-insensitive)
+            // Keep the one with the most shots/games, delete the others
+            let allPlayers = try? container.mainContext.fetch(FetchDescriptor<Player>())
+            if let players = allPlayers, players.count > 0 {
+                var needsSave = false
+                var playerNames = [String: [Player]]()
+                
+                // Group players by name (case-insensitive, trimmed)
+                for player in players {
+                    let name = player.name.trimmingCharacters(in: .whitespaces).lowercased()
+                    if !name.isEmpty {
+                        if playerNames[name] == nil {
+                            playerNames[name] = []
+                        }
+                        playerNames[name]?.append(player)
+                    }
+                }
+                
+                // For each duplicate name, keep the one with most shots, delete others
+                for (_, duplicates) in playerNames where duplicates.count > 1 {
+                    print("⚠️ Found \(duplicates.count) duplicate players with name: '\(duplicates.first?.name ?? "Unknown")'")
+                    
+                    // Find the player with most shots (most active player)
+                    let playerWithMostShots = duplicates.max { player1, player2 in
+                        let shots1 = (player1.shots ?? []).count
+                        let shots2 = (player2.shots ?? []).count
+                        if shots1 != shots2 {
+                            return shots1 < shots2
+                        }
+                        // If same shot count, prefer the one with more games
+                        let games1 = (player1.games ?? []).count
+                        let games2 = (player2.games ?? []).count
+                        return games1 < games2
+                    }
+                    
+                    // Delete the duplicates, keeping only the one with most data
+                    for duplicate in duplicates where duplicate.id != playerWithMostShots?.id {
+                        print("  🗑️ Deleting duplicate player: \(duplicate.name) (ID: \(duplicate.id))")
+                        container.mainContext.delete(duplicate)
+                        needsSave = true
+                    }
+                }
+                
+                if needsSave {
+                    do {
+                        try container.mainContext.save()
+                        print("✅ Cleaned up duplicate players")
+                    } catch {
+                        print("⚠️ Error cleaning up duplicate players: \(error)")
+                    }
+                }
+            }
+            
             let allGames = try? container.mainContext.fetch(FetchDescriptor<Game>())
             if let games = allGames {
                 var needsSave = false

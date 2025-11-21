@@ -22,6 +22,8 @@ struct AddPlayerView: View {
     @State private var showingContactPicker = false
     @State private var selectedContact: CNContact?
     @State private var showingPermissionAlert = false
+    @State private var showingDuplicateAlert = false
+    @State private var duplicatePlayerName = ""
     
     private var handicap: Double {
         Double(handicapText) ?? 0.0
@@ -98,6 +100,11 @@ struct AddPlayerView: View {
             } message: {
                 Text("Please enable Contacts access in Settings to import player information.")
             }
+            .alert("Duplicate Player", isPresented: $showingDuplicateAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("A player named '\(duplicatePlayerName)' already exists. Please use a different name or edit the existing player.")
+            }
         }
     }
     
@@ -133,16 +140,30 @@ struct AddPlayerView: View {
     }
     
     private func addPlayer() {
+        // Check for duplicate players by name (case-insensitive)
+        let trimmedName = playerName.trimmingCharacters(in: .whitespaces)
+        guard !trimmedName.isEmpty else { return }
+        
+        let existingPlayers: [Player] = try! modelContext.fetch(FetchDescriptor())
+        
+        // Check if a player with the same name already exists
+        if let existingPlayer = existingPlayers.first(where: { $0.name.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(trimmedName) == .orderedSame }) {
+            // Player with this name already exists
+            print("⚠️ Player '\(trimmedName)' already exists. Not creating duplicate.")
+            duplicatePlayerName = trimmedName
+            showingDuplicateAlert = true
+            return
+        }
+        
         // If marking as current user, unmark any existing current user
         if isCurrentUser {
-            let existingPlayers: [Player] = try! modelContext.fetch(FetchDescriptor())
             for player in existingPlayers where player.isCurrentUser {
                 player.isCurrentUser = false
             }
         }
         
         let player = Player(
-            name: playerName,
+            name: trimmedName,
             handicap: handicap,
             isCurrentUser: isCurrentUser,
             email: email.isEmpty ? nil : email,

@@ -16,9 +16,44 @@ struct StatisticsChartView: View {
     let filteredGames: [Game]
     let filteredShots: [Shot]
     
+    // Deduplicate players by ID and name to prevent duplicate stats
+    // If multiple players have the same name, keep the one with the most shots
+    private var uniquePlayers: [Player] {
+        var seenIDs = Set<UUID>()
+        var seenNames = [String: Player]()
+        
+        // First pass: deduplicate by ID
+        let playersByID = players.filter { player in
+            if seenIDs.contains(player.id) {
+                return false
+            }
+            seenIDs.insert(player.id)
+            return true
+        }
+        
+        // Second pass: deduplicate by name, keeping the player with most shots
+        for player in playersByID {
+            let playerName = player.name.trimmingCharacters(in: .whitespaces)
+            if let existingPlayer = seenNames[playerName] {
+                // Compare shot counts - keep the one with more shots
+                let existingShots = filteredShots.filter { $0.player?.id == existingPlayer.id }.count
+                let currentShots = filteredShots.filter { $0.player?.id == player.id }.count
+                
+                if currentShots > existingShots {
+                    seenNames[playerName] = player
+                }
+                // Otherwise keep the existing one
+            } else {
+                seenNames[playerName] = player
+            }
+        }
+        
+        return Array(seenNames.values)
+    }
+    
     var body: some View {
         List {
-            ForEach(players.sortedWithCurrentUserFirst()) { player in
+            ForEach(uniquePlayers.sortedWithCurrentUserFirst()) { player in
                 Section(header: Text(player.name).font(.headline)) {
                     PlayerChartsSection(
                         player: player,
