@@ -147,7 +147,7 @@ struct AddPlayerView: View {
         let existingPlayers: [Player] = try! modelContext.fetch(FetchDescriptor())
         
         // Check if a player with the same name already exists
-        if let existingPlayer = existingPlayers.first(where: { $0.name.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(trimmedName) == .orderedSame }) {
+        if existingPlayers.first(where: { $0.name.trimmingCharacters(in: .whitespaces).caseInsensitiveCompare(trimmedName) == .orderedSame }) != nil {
             // Player with this name already exists
             print("⚠️ Player '\(trimmedName)' already exists. Not creating duplicate.")
             duplicatePlayerName = trimmedName

@@ -183,7 +183,8 @@ final class Game {
                     }
                 }
             }
-            return playersArray.map { player in
+            // Return in sorted order (current user first) to match display order
+            return playersArray.sortedWithCurrentUserFirst().map { player in
                 let gross = playerGrossTotals[player.id] ?? 0
                 let effectiveHandicap = useHalfHandicap ? player.handicap / 2.0 : player.handicap
                 let net = max(0, gross - Int(round(effectiveHandicap)))
@@ -207,7 +208,8 @@ final class Game {
             }
         }
         
-        return playersArray.map { player in
+        // Return in sorted order (current user first) to match display order
+        return playersArray.sortedWithCurrentUserFirst().map { player in
             let gross = playerGrossTotals[player.id] ?? 0
             let net = playerNetTotals[player.id] ?? 0
             return (player: player, gross: gross, net: net)

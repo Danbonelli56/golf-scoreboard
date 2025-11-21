@@ -126,7 +126,7 @@ struct ScorecardView: View {
                                         Button {
                                             completeGame(game)
                                         } label: {
-                                            Label("Move to History", systemImage: "archive")
+                                            Label("Move to History", systemImage: "tray.and.arrow.down")
                                         }
                                     }
                                     
@@ -513,6 +513,27 @@ struct ScorecardView: View {
         }
     }
     
+    // Helper function to convert written numbers to integers
+    private func parseNumberWord(_ word: String) -> Int? {
+        let numberWords: [String: Int] = [
+            "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+            "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+            "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+            "sixteen": 16, "seventeen": 17, "eighteen": 18
+        ]
+        return numberWords[word.lowercased()]
+    }
+    
+    // Helper function to parse a number from text (either digit or word)
+    private func parseNumber(from text: String) -> Int? {
+        // First try parsing as digit
+        if let number = Int(text) {
+            return number
+        }
+        // Then try parsing as written number
+        return parseNumberWord(text)
+    }
+    
     private func parseAndUpdateScores(text: String) {
         guard let game = selectedGame else {
             print("⚠️ No game selected")
@@ -524,12 +545,28 @@ struct ScorecardView: View {
         
         let lowerText = text.lowercased()
         
-        // Extract hole number
+        // Extract hole number - try multiple patterns:
+        // 1. "hole 10" or "hole10"
+        // 2. Just a number at the start (within valid range 1-18)
         var holeNumber: Int?
-        if let holePattern = try? NSRegularExpression(pattern: "hole\\s+(\\d+)", options: .caseInsensitive),
+        
+        // Pattern 1: "hole 10" or "hole10"
+        if let holePattern = try? NSRegularExpression(pattern: "hole\\s*(\\d+)", options: .caseInsensitive),
            let holeMatch = holePattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
            let holeRange = Range(holeMatch.range(at: 1), in: lowerText) {
             holeNumber = Int(String(lowerText[holeRange]))
+        }
+        
+        // Pattern 2: Check if text starts with a number (for "10 five John four")
+        if holeNumber == nil {
+            let words = lowerText.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+            if let firstWord = words.first, let firstNumber = parseNumber(from: firstWord) {
+                // Check if it's a valid hole number (1-18)
+                if firstNumber >= 1 && firstNumber <= 18 {
+                    holeNumber = firstNumber
+                    print("📍 Found hole number at start of text: \(firstNumber)")
+                }
+            }
         }
         
         // If no hole number provided, find the first empty hole
@@ -616,13 +653,94 @@ struct ScorecardView: View {
                 // Check both first name and full name patterns
                 if score == nil {
                     for nameToMatch in namePatterns {
-                        let absolutePattern = "\(nameToMatch).*?\\b(\\d+)\\b"
-                        if let regex = try? NSRegularExpression(pattern: absolutePattern, options: .caseInsensitive),
+                        // Escape special regex characters in the name
+                        let escapedName = NSRegularExpression.escapedPattern(for: nameToMatch)
+                        
+                        // Try direct pattern with digits: "name 5" or "name scored 5"
+                        let directPattern = "\\b\(escapedName)\\s+(?:scored|got|shot|is|was)?\\s*(\\d+)\\b"
+                        if let regex = try? NSRegularExpression(pattern: directPattern, options: .caseInsensitive),
                            let match = regex.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
                            let scoreRange = Range(match.range(at: 1), in: lowerText) {
-                            score = Int(String(lowerText[scoreRange]))
-                            print("  ✅ Found absolute score: \(score!)")
-                            break
+                            if let parsedScore = Int(String(lowerText[scoreRange])) {
+                                score = parsedScore
+                                print("  ✅ Found absolute score (direct digit): \(score!)")
+                                break
+                            }
+                        }
+                        
+                        // Try pattern with written numbers: "name five" or "name four"
+                        let numberWords = "zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen"
+                        let wordPattern = "\\b\(escapedName)\\s+(?:scored|got|shot|is|was)?\\s*\\b(\(numberWords))\\b"
+                        if let regex = try? NSRegularExpression(pattern: wordPattern, options: .caseInsensitive),
+                           let match = regex.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+                           let scoreRange = Range(match.range(at: 1), in: lowerText) {
+                            let numberWord = String(lowerText[scoreRange])
+                            if let parsedScore = parseNumberWord(numberWord) {
+                                score = parsedScore
+                                print("  ✅ Found absolute score (written number): \(numberWord) = \(score!)")
+                                break
+                            }
+                        }
+                        
+                        // Try simple pattern with digits: "name 5"
+                        let simplePattern = "\\b\(escapedName)\\s+(\\d+)\\b"
+                        if let regex = try? NSRegularExpression(pattern: simplePattern, options: .caseInsensitive),
+                           let match = regex.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+                           let scoreRange = Range(match.range(at: 1), in: lowerText) {
+                            if let parsedScore = Int(String(lowerText[scoreRange])) {
+                                score = parsedScore
+                                print("  ✅ Found absolute score (simple digit): \(score!)")
+                                break
+                            }
+                        }
+                        
+                        // Try simple pattern with written numbers: "name five"
+                        let simpleWordPattern = "\\b\(escapedName)\\s+\\b(\(numberWords))\\b"
+                        if let regex = try? NSRegularExpression(pattern: simpleWordPattern, options: .caseInsensitive),
+                           let match = regex.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+                           let scoreRange = Range(match.range(at: 1), in: lowerText) {
+                            let numberWord = String(lowerText[scoreRange])
+                            if let parsedScore = parseNumberWord(numberWord) {
+                                score = parsedScore
+                                print("  ✅ Found absolute score (simple written): \(numberWord) = \(score!)")
+                                break
+                            }
+                        }
+                        
+                        // Fallback to flexible pattern with digits: "name ... 5"
+                        let flexiblePattern = "\\b\(escapedName)\\b.*?\\b(\\d+)\\b"
+                        if let regex = try? NSRegularExpression(pattern: flexiblePattern, options: .caseInsensitive),
+                           let match = regex.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+                           let scoreRange = Range(match.range(at: 1), in: lowerText) {
+                            // Make sure the number is reasonably close to the name (within 20 characters)
+                            let nameRange = match.range(at: 0)
+                            let scoreStart = match.range(at: 1).location
+                            let distance = scoreStart - (nameRange.location + nameRange.length)
+                            
+                            if distance <= 20, let parsedScore = Int(String(lowerText[scoreRange])) {
+                                score = parsedScore
+                                print("  ✅ Found absolute score (flexible digit): \(score!)")
+                                break
+                            }
+                        }
+                        
+                        // Fallback to flexible pattern with written numbers: "name ... five"
+                        let flexibleWordPattern = "\\b\(escapedName)\\b.*?\\b(\(numberWords))\\b"
+                        if let regex = try? NSRegularExpression(pattern: flexibleWordPattern, options: .caseInsensitive),
+                           let match = regex.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+                           let scoreRange = Range(match.range(at: 1), in: lowerText) {
+                            let nameRange = match.range(at: 0)
+                            let scoreStart = match.range(at: 1).location
+                            let distance = scoreStart - (nameRange.location + nameRange.length)
+                            
+                            if distance <= 20 {
+                                let numberWord = String(lowerText[scoreRange])
+                                if let parsedScore = parseNumberWord(numberWord) {
+                                    score = parsedScore
+                                    print("  ✅ Found absolute score (flexible written): \(numberWord) = \(score!)")
+                                    break
+                                }
+                            }
                         }
                     }
                 }
