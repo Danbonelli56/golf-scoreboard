@@ -16,6 +16,7 @@ struct TextInputBar: View {
     
     var onCommit: () -> Void
     var onToggleListening: (() -> Void)?
+    var playerNames: [String] = [] // Player names for focused vocabulary (scorecard only)
     
     var body: some View {
         VStack(spacing: 0) {
@@ -71,6 +72,16 @@ struct TextInputBar: View {
         .onAppear {
             Task {
                 await voiceManager.requestAuthorization()
+            }
+            // Update vocabulary with player names if provided (for scorecard)
+            if !playerNames.isEmpty {
+                voiceManager.updatePlayerNames(playerNames)
+            }
+        }
+        .onChange(of: playerNames) { _, newNames in
+            // Update vocabulary when player names change
+            if !newNames.isEmpty {
+                voiceManager.updatePlayerNames(newNames)
             }
         }
         .preference(key: MicToggleKey.self, value: MicToggleHandler(action: toggleListening))

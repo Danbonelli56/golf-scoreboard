@@ -22,26 +22,45 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     
-    // Golf vocabulary for better recognition
-    private let golfVocabulary = [
-        // Clubs
-        "driver", "putter", "putt", "putting", "wedge", "hybrid", "iron",
-        "pitching wedge", "gap wedge", "sand wedge", "lob wedge",
-        "three wood", "five wood", "three hybrid", "four hybrid", "five hybrid",
-        "three iron", "four iron", "five iron", "six iron", "seven iron", "eight iron", "nine iron",
-        // Scores
-        "par", "parr", "birdie", "bogey", "eagle", "albatross", "double bogey", "triple bogey",
-        // Shot results
-        "straight", "right", "left", "out of bounds", "hazard", "sand trap",
-        // Golf phrases
-        "on the green", "short of the green", "over the green", "short of the pin", "over the pin",
-        "down the left side", "down the right side", "in the hole", "sunk putt", "made putt",
-        "hole one", "hole two", "hole three", "hole four", "hole five", "hole six",
-        "hole seven", "hole eight", "hole nine", "hole ten", "hole eleven", "hole twelve",
-        "hole thirteen", "hole fourteen", "hole fifteen", "hole sixteen", "hole seventeen", "hole eighteen",
-        // Measurements
-        "yards", "feet", "long", "short"
-    ]
+    // Player first names for vocabulary (set dynamically)
+    private var playerFirstNames: [String] = []
+    
+    // Base golf vocabulary - focused on scoring terms and numbers
+    private var baseGolfVocabulary: [String] {
+        [
+            // Golf scoring terms
+            "par", "birdie", "bogey", "eagle", "albatross", "double bogey", "triple bogey",
+            "double eagle", "double-bogey", "triple-bogey",
+            // Numbers 1-8 (as words)
+            "one", "two", "three", "four", "five", "six", "seven", "eight",
+            // Numbers 1-8 (as digits - for contextual strings)
+            "1", "2", "3", "4", "5", "6", "7", "8"
+        ]
+    }
+    
+    // Computed vocabulary that includes player names
+    private var golfVocabulary: [String] {
+        baseGolfVocabulary + playerFirstNames
+    }
+    
+    // Update player names for vocabulary
+    func updatePlayerNames(_ players: [String]) {
+        // Extract first names from player names
+        playerFirstNames = players.compactMap { fullName -> String? in
+            let trimmed = fullName.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return nil }
+            
+            // Split by space and take first part
+            let components = trimmed.components(separatedBy: .whitespaces)
+            let firstName = components.first?.trimmingCharacters(in: .whitespaces) ?? trimmed
+            
+            // Return lowercase for better matching
+            return firstName.lowercased()
+        }
+        // Remove duplicates while preserving order
+        var seen = Set<String>()
+        playerFirstNames = playerFirstNames.filter { seen.insert($0).inserted }
+    }
     
     override init() {
         super.init()
@@ -114,8 +133,8 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
         
         // Configure audio session
         do {
-            try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
+        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             throw VoiceRecognitionError.audioEngineError
         }
@@ -128,7 +147,8 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
         recognitionRequest.shouldReportPartialResults = true
         self.recognitionRequest = recognitionRequest
         
-        // Add context phrases for better recognition
+        // Add context phrases for better recognition (focused vocabulary)
+        // Limited to: player first names, numbers 1-8, and golf scoring terms
         if #available(iOS 13.0, *) {
             recognitionRequest.contextualStrings = golfVocabulary
         }
@@ -182,8 +202,8 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
         }
         
         do {
-            audioEngine.prepare()
-            try audioEngine.start()
+        audioEngine.prepare()
+        try audioEngine.start()
         } catch {
             await cleanupResources()
             throw VoiceRecognitionError.audioEngineError
@@ -239,7 +259,7 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
             recognitionRequest = nil
             
             // Reset listening state
-            isListening = false
+        isListening = false
         }
     }
     

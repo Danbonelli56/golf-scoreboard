@@ -89,14 +89,21 @@ struct ScorecardView: View {
                     } else if game.gameFormat == "bestball" || game.gameFormat == "bestball_matchplay" {
                         BestBallScorecardView(game: game)
                     } else {
-                        GameScorecardView(game: game)
+                    GameScorecardView(game: game)
                     }
                 } else {
                     EmptyStateView()
                 }
                 
                 // Voice/Text Input Bar - Always at bottom
-                TextInputBar(inputText: $inputText, listening: $listening, onCommit: handleInput, onToggleListening: nil)
+                // Pass player names for focused vocabulary (scorecard only)
+                TextInputBar(
+                    inputText: $inputText,
+                    listening: $listening,
+                    onCommit: handleInput,
+                    onToggleListening: nil,
+                    playerNames: selectedGame?.playersArray.map { $0.name } ?? []
+                )
             }
             .navigationTitle("Scorecard")
             .toolbar {
@@ -744,7 +751,7 @@ struct ScorecardView: View {
                                 if let parsedScore = parseNumberWord(numberWord) {
                                     score = parsedScore
                                     print("  ✅ Found absolute score (flexible written): \(numberWord) = \(score!)")
-                                    break
+                            break
                                 }
                             }
                         }
