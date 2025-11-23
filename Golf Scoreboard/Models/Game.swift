@@ -19,11 +19,12 @@ final class Game {
     var createdAt: Date?
     var selectedTeeColor: String? // Override tee color for this game
     var isCompleted: Bool = false // Whether the game is completed and archived
+    var gameFormat: String = "stroke" // Game format: "stroke", "stableford", "bestball", "skins"
     // Use new property name to avoid CloudKit conflict with old binary data
     // Old CloudKit records have "trackingPlayerIDs" as binary data, so we use a new name
     var trackingPlayerIDs_v2: String? // IDs of players who are tracking shots (stored as comma-separated UUID strings)
     
-    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil) {
+    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil, gameFormat: String = "stroke") {
         self.id = UUID()
         self.course = course
         self.date = date ?? Date()
@@ -31,6 +32,7 @@ final class Game {
         self.holesScores = []
         self.createdAt = nil
         self.selectedTeeColor = selectedTeeColor
+        self.gameFormat = gameFormat
         // Convert UUID array to comma-separated string for SwiftData compatibility
         self.trackingPlayerIDs_v2 = trackingPlayerIDs?.map { $0.uuidString }.joined(separator: ",")
     }
@@ -168,6 +170,57 @@ final class Game {
         
         let strokes = strokesForHole(player: player, holeHandicap: hole.mensHandicap, useHalfHandicap: useHalfHandicap)
         return max(0, gross - strokes)
+    }
+    
+    // Calculate Stableford points for a specific hole
+    // Points: Double Eagle (3 under) = 5, Eagle (2 under) = 4, Birdie (1 under) = 3, Par = 2, Bogey (1 over) = 1, Double Bogey+ (2+ over) = 0
+    func stablefordPointsForHole(player: Player, holeNumber: Int) -> Int? {
+        guard let course = course,
+              let holes = course.holes,
+              let hole = holes.first(where: { $0.holeNumber == holeNumber }),
+              let gross = holesScoresArray.first(where: { $0.holeNumber == holeNumber })?.scores[player.id] else {
+            return nil
+        }
+        
+        // Calculate net score
+        let strokes = strokesForHole(player: player, holeHandicap: hole.mensHandicap, useHalfHandicap: false)
+        let netScore = gross - strokes
+        
+        // Calculate points based on net score relative to par
+        let scoreRelativeToPar = netScore - hole.par
+        
+        switch scoreRelativeToPar {
+        case ...(-3): // Double Eagle or better
+            return 5
+        case -2: // Eagle
+            return 4
+        case -1: // Birdie
+            return 3
+        case 0: // Par
+            return 2
+        case 1: // Bogey
+            return 1
+        default: // Double Bogey or worse
+            return 0
+        }
+    }
+    
+    // Calculate total Stableford points for a player
+    func totalStablefordPoints(player: Player) -> Int {
+        var totalPoints = 0
+        for holeNumber in 1...18 {
+            if let points = stablefordPointsForHole(player: player, holeNumber: holeNumber) {
+                totalPoints += points
+            }
+        }
+        return totalPoints
+    }
+    
+    // Get Stableford standings (sorted by total points, highest first)
+    var stablefordStandings: [(player: Player, points: Int)] {
+        return playersArray.sortedWithCurrentUserFirst().map { player in
+            (player: player, points: totalStablefordPoints(player: player))
+        }.sorted { $0.points > $1.points } // Sort by points descending
     }
     
     private func calculateScores(holesScores: [HoleScore], useHalfHandicap: Bool = false) -> [(player: Player, gross: Int, net: Int)] {

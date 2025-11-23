@@ -23,6 +23,7 @@ struct GameSetupView: View {
     @State private var selectedPlayers: Set<UUID> = []
     @State private var trackingPlayers: Set<UUID> = []
     @State private var selectedTeeColor: String? = nil
+    @State private var selectedGameFormat: String = "stroke"
     
     private var availableTeeColors: [String] {
         guard let course = selectedCourse else { return [] }
@@ -92,6 +93,23 @@ struct GameSetupView: View {
                     
                     NavigationLink("Add Course") {
                         AddCourseView()
+                    }
+                }
+                
+                Section("Game Format") {
+                    Picker("Format", selection: $selectedGameFormat) {
+                        Text("Stroke Play").tag("stroke")
+                        Text("Stableford").tag("stableford")
+                        // Future formats: Best Ball, Skins
+                        // Text("Best Ball").tag("bestball")
+                        // Text("Skins").tag("skins")
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    if selectedGameFormat == "stableford" {
+                        Text("Points: Double Eagle (5), Eagle (4), Birdie (3), Par (2), Bogey (1), Double Bogey+ (0)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
                 }
                 
@@ -252,7 +270,7 @@ struct GameSetupView: View {
             return Array(trackingPlayers)
         }()
         
-        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse, trackingPlayerIDs: trackingPlayerIDsArray)
+        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse, trackingPlayerIDs: trackingPlayerIDsArray, gameFormat: selectedGameFormat)
         
         // Only one game can be active at a time
         modelContext.insert(newGame)

@@ -81,8 +81,8 @@ struct CalendarImportView: View {
                                     event: event,
                                     courses: courses,
                                     players: players,
-                                    onImport: { [self] course, selectedPlayers, trackingPlayerIDs in
-                                        importGame(course: course, players: selectedPlayers, trackingPlayerIDs: trackingPlayerIDs, event: event)
+                                    onImport: { [self] course, selectedPlayers, trackingPlayerIDs, gameFormat in
+                                        importGame(course: course, players: selectedPlayers, trackingPlayerIDs: trackingPlayerIDs, gameFormat: gameFormat, event: event)
                                     }
                                 )
                             }
@@ -126,7 +126,7 @@ struct CalendarImportView: View {
         golfEvents = await calendarManager.searchGolfEvents()
     }
     
-    func importGame(course: GolfCourse, players: [Player], trackingPlayerIDs: [UUID], event: GolfCalendarEvent) {
+    func importGame(course: GolfCourse, players: [Player], trackingPlayerIDs: [UUID], gameFormat: String, event: GolfCalendarEvent) {
         // Use default tee color logic (same as GameSetupView)
         let defaultTeeColor: String? = {
             if let currentUser = players.first(where: { $0.isCurrentUser }),
@@ -155,7 +155,7 @@ struct CalendarImportView: View {
             return trackingPlayerIDs
         }()
         
-        let newGame = Game(course: course, players: players, selectedTeeColor: defaultTeeColor, trackingPlayerIDs: trackingPlayerIDsToUse)
+        let newGame = Game(course: course, players: players, selectedTeeColor: defaultTeeColor, trackingPlayerIDs: trackingPlayerIDsToUse, gameFormat: gameFormat)
         
         modelContext.insert(newGame)
         
@@ -175,7 +175,7 @@ struct CalendarEventRow: View {
     let event: GolfCalendarEvent
     let courses: [GolfCourse]
     let players: [Player]
-    let onImport: (GolfCourse, [Player], [UUID]) -> Void
+    let onImport: (GolfCourse, [Player], [UUID], String) -> Void
     
     @State private var showingImportSheet = false
     @State private var matchedCourse: GolfCourse?
@@ -225,8 +225,8 @@ struct CalendarEventRow: View {
                 matchedPlayers: matchedPlayers,
                 allCourses: courses,
                 allPlayers: players,
-                onConfirm: { course, selectedPlayers, trackingPlayers in
-                    onImport(course, selectedPlayers, trackingPlayers)
+                onConfirm: { course, selectedPlayers, trackingPlayers, gameFormat in
+                    onImport(course, selectedPlayers, trackingPlayers, gameFormat)
                     showingImportSheet = false
                 },
                 onCancel: {
@@ -528,12 +528,13 @@ struct CalendarImportConfirmationView: View {
     let matchedPlayers: [Player]
     let allCourses: [GolfCourse]
     let allPlayers: [Player]
-    let onConfirm: (GolfCourse, [Player], [UUID]) -> Void
+    let onConfirm: (GolfCourse, [Player], [UUID], String) -> Void
     let onCancel: () -> Void
     
     @State private var selectedCourse: GolfCourse?
     @State private var selectedPlayers: Set<UUID> = []
     @State private var trackingPlayers: Set<UUID> = []
+    @State private var selectedGameFormat: String = "stroke"
     
     var body: some View {
         NavigationView {
@@ -612,6 +613,23 @@ struct CalendarImportConfirmationView: View {
                     }
                 }
                 
+                Section("Game Format") {
+                    Picker("Format", selection: $selectedGameFormat) {
+                        Text("Stroke Play").tag("stroke")
+                        Text("Stableford").tag("stableford")
+                        // Future formats: Best Ball, Skins
+                        // Text("Best Ball").tag("bestball")
+                        // Text("Skins").tag("skins")
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    if selectedGameFormat == "stableford" {
+                        Text("Points: Double Eagle (5), Eagle (4), Birdie (3), Par (2), Bogey (1), Double Bogey+ (0)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
                 // Shot Tracking section (only show when players are selected)
                 if !selectedPlayers.isEmpty {
                     Section("Shot Tracking") {
@@ -669,7 +687,7 @@ struct CalendarImportConfirmationView: View {
                     if let course = selectedCourse {
                         let playersArray = allPlayers.filter { selectedPlayers.contains($0.id) }
                         let trackingPlayerIDsArray = Array(trackingPlayers)
-                        onConfirm(course, playersArray, trackingPlayerIDsArray)
+                        onConfirm(course, playersArray, trackingPlayerIDsArray, selectedGameFormat)
                     }
                 }
                 .disabled(selectedCourse == nil || selectedPlayers.isEmpty)

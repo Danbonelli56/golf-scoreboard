@@ -84,7 +84,11 @@ struct ScorecardView: View {
             VStack(spacing: 0) {
                 // Main content area
                 if let game = selectedGame {
-                    GameScorecardView(game: game)
+                    if game.gameFormat == "stableford" {
+                        StablefordScorecardView(game: game)
+                    } else {
+                        GameScorecardView(game: game)
+                    }
                 } else {
                     EmptyStateView()
                 }
