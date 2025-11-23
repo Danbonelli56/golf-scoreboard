@@ -192,14 +192,23 @@ final class Game {
         var holesPlayed = 0
         
         for holeNumber in 1...18 {
-            if let winner = matchPlayHoleWinner(holeNumber: holeNumber) {
+            // Check if both teams have scores for this hole (hole is played)
+            let team1HasScore = bestBallNetScoreForTeam(team1Name, holeNumber: holeNumber) != nil
+            let team2HasScore = bestBallNetScoreForTeam(team2Name, holeNumber: holeNumber) != nil
+            
+            if team1HasScore && team2HasScore {
+                // Hole has been played
                 holesPlayed += 1
-                if winner == team1Name {
-                    team1Wins += 1
-                } else if winner == team2Name {
-                    team2Wins += 1
+                
+                // Determine winner (if any)
+                if let winner = matchPlayHoleWinner(holeNumber: holeNumber) {
+                    if winner == team1Name {
+                        team1Wins += 1
+                    } else if winner == team2Name {
+                        team2Wins += 1
+                    }
+                    // Tied holes don't count as wins for either team
                 }
-                // Tied holes don't count as wins for either team
             }
         }
         
@@ -376,7 +385,7 @@ final class Game {
     }
     
     // Calculate Stableford points for a specific hole
-    // Points: Double Eagle (3 under) = 5, Eagle (2 under) = 4, Birdie (1 under) = 3, Par = 2, Bogey (1 over) = 1, Double Bogey+ (2+ over) = 0
+    // Uses configurable point values from StablefordSettings
     func stablefordPointsForHole(player: Player, holeNumber: Int) -> Int? {
         guard let course = course,
               let holes = course.holes,
@@ -392,20 +401,8 @@ final class Game {
         // Calculate points based on net score relative to par
         let scoreRelativeToPar = netScore - hole.par
         
-        switch scoreRelativeToPar {
-        case ...(-3): // Double Eagle or better
-            return 5
-        case -2: // Eagle
-            return 4
-        case -1: // Birdie
-            return 3
-        case 0: // Par
-            return 2
-        case 1: // Bogey
-            return 1
-        default: // Double Bogey or worse
-            return 0
-        }
+        // Use configurable point values from settings
+        return StablefordSettings.shared.pointsForScore(scoreRelativeToPar: scoreRelativeToPar)
     }
     
     // Calculate total Stableford points for a player

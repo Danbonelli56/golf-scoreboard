@@ -110,6 +110,17 @@ struct SettingsView: View {
                 }
                 
                 Section {
+                    NavigationLink(destination: StablefordSettingsView()) {
+                        Label("Stableford Points", systemImage: "star.fill")
+                            .foregroundColor(.orange)
+                    }
+                } header: {
+                    Text("Game Settings")
+                } footer: {
+                    Text("Configure point values for Stableford scoring")
+                }
+                
+                Section {
                     HStack {
                         Text("Version")
                             .foregroundColor(.secondary)

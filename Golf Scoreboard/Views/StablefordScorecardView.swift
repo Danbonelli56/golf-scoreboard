@@ -45,6 +45,12 @@ struct StablefordScorecardView: View {
         return playerFirstName
     }
     
+    // Point system text for header
+    private var pointSystemText: String {
+        let settings = StablefordSettings.shared
+        return "Points: DE(\(settings.pointsForDoubleEagle)) E(\(settings.pointsForEagle)) B(\(settings.pointsForBirdie)) P(\(settings.pointsForPar)) Bo(\(settings.pointsForBogey)) DB+(\(settings.pointsForDoubleBogey))"
+    }
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -74,6 +80,14 @@ struct StablefordScorecardView: View {
                         Text("Format: Stableford")
                             .font(.subheadline)
                             .foregroundColor(.blue)
+                        Spacer()
+                    }
+                    
+                    // Point system reference
+                    HStack {
+                        Text(pointSystemText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                         Spacer()
                     }
                 }
@@ -235,17 +249,21 @@ struct StablefordHoleRow: View {
     }
     
     private func pointsColor(for points: Int) -> Color {
-        switch points {
-        case 4...5: // Eagle or better
-            return .green
-        case 3: // Birdie
-            return .blue
-        case 2: // Par
-            return .primary
-        case 1: // Bogey
-            return .orange
-        default: // Double bogey or worse
-            return .red
+        let settings = StablefordSettings.shared
+        
+        // Compare against configured point values
+        if points >= settings.pointsForDoubleEagle {
+            return .green // Double Eagle or better
+        } else if points == settings.pointsForEagle {
+            return .green // Eagle
+        } else if points == settings.pointsForBirdie {
+            return .blue // Birdie
+        } else if points == settings.pointsForPar {
+            return .primary // Par
+        } else if points == settings.pointsForBogey {
+            return .orange // Bogey
+        } else {
+            return .red // Double Bogey or worse
         }
     }
 }

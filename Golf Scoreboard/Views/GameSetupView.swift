@@ -114,7 +114,8 @@ struct GameSetupView: View {
                     .pickerStyle(.menu)
                     
                     if selectedGameFormat == "stableford" {
-                        Text("Points: Double Eagle (5), Eagle (4), Birdie (3), Par (2), Bogey (1), Double Bogey+ (0)")
+                        let settings = StablefordSettings.shared
+                        Text("Points: Double Eagle (\(settings.pointsForDoubleEagle)), Eagle (\(settings.pointsForEagle)), Birdie (\(settings.pointsForBirdie)), Par (\(settings.pointsForPar)), Bogey (\(settings.pointsForBogey)), Double Bogey+ (\(settings.pointsForDoubleBogey))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

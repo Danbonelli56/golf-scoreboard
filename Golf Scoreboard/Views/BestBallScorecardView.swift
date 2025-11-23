@@ -46,9 +46,10 @@ struct BestBallScorecardView: View {
     }
     
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            // Fixed header with match play status
             VStack(spacing: 0) {
-                // Header
+                // Course info header
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(game.course?.name ?? "Unknown Course")
@@ -82,24 +83,31 @@ struct BestBallScorecardView: View {
                         }
                         Spacer()
                     }
-                    
-                    // Match play status
-                    if game.gameFormat == "bestball_matchplay" {
-                        let matchStatus = game.matchPlayStatus
-                        HStack {
-                            Text(matchStatus.status)
-                                .font(.subheadline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.green)
-                            Spacer()
-                        }
-                        .padding(.top, 2)
-                    }
                 }
                 .padding()
                 .background(Color(.secondarySystemBackground))
                 
+                // Match play status bar (fixed, always visible)
+                if game.gameFormat == "bestball_matchplay" {
+                    let matchStatus = game.matchPlayStatus
+                    HStack {
+                        Spacer()
+                        Text(matchStatus.status)
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                    .background(Color.green)
+                }
+                
                 Divider()
+            }
+            
+            // Scrollable content
+            ScrollView {
+                VStack(spacing: 0) {
                 
                 // Check if teams are set up
                 if game.teamNames.isEmpty {
@@ -248,6 +256,7 @@ struct BestBallScorecardView: View {
                         Divider()
                         BestBallMatchPlaySummaryRow(game: game, team1Name: team1Name, team2Name: team2Name)
                     }
+                }
                 }
             }
         }
