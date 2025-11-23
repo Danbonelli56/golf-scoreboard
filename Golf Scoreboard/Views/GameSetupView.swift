@@ -24,6 +24,12 @@ struct GameSetupView: View {
     @State private var trackingPlayers: Set<UUID> = []
     @State private var selectedTeeColor: String? = nil
     @State private var selectedGameFormat: String = "stroke"
+    @State private var team1Players: Set<UUID> = []
+    @State private var team2Players: Set<UUID> = []
+    @State private var team1Name: String = "Team 1"
+    @State private var team2Name: String = "Team 2"
+    @State private var showingTeamValidationAlert = false
+    @State private var teamValidationMessage = ""
     
     private var availableTeeColors: [String] {
         guard let course = selectedCourse else { return [] }
@@ -100,16 +106,84 @@ struct GameSetupView: View {
                     Picker("Format", selection: $selectedGameFormat) {
                         Text("Stroke Play").tag("stroke")
                         Text("Stableford").tag("stableford")
-                        // Future formats: Best Ball, Skins
-                        // Text("Best Ball").tag("bestball")
+                        Text("Best Ball").tag("bestball")
+                        Text("Best Ball Match Play").tag("bestball_matchplay")
+                        // Future formats: Skins
                         // Text("Skins").tag("skins")
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                     
                     if selectedGameFormat == "stableford" {
                         Text("Points: Double Eagle (5), Eagle (4), Birdie (3), Par (2), Bogey (1), Double Bogey+ (0)")
                             .font(.caption)
                             .foregroundColor(.secondary)
+                    }
+                    
+                    if selectedGameFormat == "bestball" {
+                        Text("Two teams of two players. Each team's score is the best (lowest) net score (with handicaps) from their players on each hole.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if selectedGameFormat == "bestball_matchplay" {
+                        Text("Two teams of two players. Teams compete hole-by-hole using net scores (with handicaps). The team with the better net score wins the hole.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                // Team assignment section for Best Ball
+                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay") && !selectedPlayers.isEmpty {
+                    Section("Team Assignment") {
+                        Text("Select Team 1 or Team 2 for each player. You need 2 players on each team.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        // Team names
+                        HStack {
+                            TextField("Team 1 Name", text: $team1Name)
+                                .textFieldStyle(.roundedBorder)
+                            TextField("Team 2 Name", text: $team2Name)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        
+                        // Column headers
+                        HStack {
+                            Text("Player")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Text("Team 1")
+                                .frame(width: 50)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Text("Team 2")
+                                .frame(width: 50)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.vertical, 4)
+                        
+                        // Team status
+                        HStack {
+                            Text("Team 1: \(team1Players.count)/2")
+                                .font(.caption)
+                                .foregroundColor(team1Players.count == 2 ? .green : .secondary)
+                            Spacer()
+                            Text("Team 2: \(team2Players.count)/2")
+                                .font(.caption)
+                                .foregroundColor(team2Players.count == 2 ? .green : .secondary)
+                        }
+                        .padding(.bottom, 4)
+                        
+                        // Player list with team selection
+                        ForEach(players.filter { selectedPlayers.contains($0.id) }) { player in
+                            PlayerTeamSelectionRow(
+                                player: player,
+                                team1Players: $team1Players,
+                                team2Players: $team2Players
+                            )
+                        }
                     }
                 }
                 
@@ -213,6 +287,17 @@ struct GameSetupView: View {
                 }
                 // Remove tracking for players who are no longer selected
                 trackingPlayers = trackingPlayers.filter { newValue.contains($0) }
+                // Remove team assignments for players who are no longer selected
+                team1Players = team1Players.filter { newValue.contains($0) }
+                team2Players = team2Players.filter { newValue.contains($0) }
+            }
+            
+            .onChange(of: selectedGameFormat) { oldValue, newValue in
+                // Reset team assignments when format changes
+                if newValue != "bestball" && newValue != "bestball_matchplay" {
+                    team1Players = []
+                    team2Players = []
+                }
             }
             .navigationTitle("New Game")
             .navigationBarTitleDisplayMode(.inline)
@@ -230,10 +315,41 @@ struct GameSetupView: View {
                     .disabled(selectedPlayers.isEmpty)
                 }
             }
+            .alert("Team Assignment Required", isPresented: $showingTeamValidationAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(teamValidationMessage)
+            }
         }
     }
     
     private func startGame() {
+        // Validate Best Ball team assignments
+        if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" {
+            if selectedPlayers.count != 4 {
+                teamValidationMessage = "Best Ball requires exactly 4 players. You have \(selectedPlayers.count) players selected."
+                showingTeamValidationAlert = true
+                return
+            }
+            if team1Players.count != 2 {
+                teamValidationMessage = "Team 1 must have exactly 2 players. Currently has \(team1Players.count) player(s)."
+                showingTeamValidationAlert = true
+                return
+            }
+            if team2Players.count != 2 {
+                teamValidationMessage = "Team 2 must have exactly 2 players. Currently has \(team2Players.count) player(s)."
+                showingTeamValidationAlert = true
+                return
+            }
+            // Check that all selected players are assigned to a team
+            let allAssignedPlayers = team1Players.union(team2Players)
+            if allAssignedPlayers.count != 4 {
+                teamValidationMessage = "All 4 players must be assigned to a team."
+                showingTeamValidationAlert = true
+                return
+            }
+        }
+        
         let selectedPlayersArray = players.filter { selectedPlayers.contains($0.id) }
         
         // Use selected tee color, or default using priority: player preference > White > Green > first available
@@ -270,7 +386,33 @@ struct GameSetupView: View {
             return Array(trackingPlayers)
         }()
         
-        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse, trackingPlayerIDs: trackingPlayerIDsArray, gameFormat: selectedGameFormat)
+        // Create team assignments for Best Ball
+        let teamAssignments: [String: [UUID]]? = {
+            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" {
+                // Validate team assignments
+                if selectedPlayers.count != 4 {
+                    // Show alert or return nil - for now just return nil
+                    return nil
+                }
+                if team1Players.count != 2 || team2Players.count != 2 {
+                    // Show alert or return nil - for now just return nil
+                    return nil
+                }
+                // Check that all selected players are assigned to a team
+                let allAssignedPlayers = team1Players.union(team2Players)
+                if allAssignedPlayers.count != 4 {
+                    return nil
+                }
+                
+                return [
+                    team1Name.isEmpty ? "Team 1" : team1Name: Array(team1Players),
+                    team2Name.isEmpty ? "Team 2" : team2Name: Array(team2Players)
+                ]
+            }
+            return nil
+        }()
+        
+        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse, trackingPlayerIDs: trackingPlayerIDsArray, gameFormat: selectedGameFormat, teamAssignments: teamAssignments)
         
         // Only one game can be active at a time
         modelContext.insert(newGame)
@@ -283,6 +425,59 @@ struct GameSetupView: View {
             dismiss()
         } catch {
             print("Error saving game: \(error)")
+        }
+    }
+}
+
+
+struct PlayerTeamSelectionRow: View {
+    let player: Player
+    @Binding var team1Players: Set<UUID>
+    @Binding var team2Players: Set<UUID>
+    
+    var body: some View {
+        HStack {
+            // Player name
+            Text(player.name)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            // Team 1 column
+            VStack {
+                Button {
+                    let pid = player.id
+                    if team1Players.contains(pid) {
+                        team1Players.remove(pid)
+                    } else {
+                        team2Players.remove(pid)
+                        team1Players.insert(pid)
+                    }
+                } label: {
+                    Image(systemName: team1Players.contains(player.id) ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundColor(team1Players.contains(player.id) ? .blue : .gray)
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(width: 50)
+            
+            // Team 2 column
+            VStack {
+                Button {
+                    let pid = player.id
+                    if team2Players.contains(pid) {
+                        team2Players.remove(pid)
+                    } else {
+                        team1Players.remove(pid)
+                        team2Players.insert(pid)
+                    }
+                } label: {
+                    Image(systemName: team2Players.contains(player.id) ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundColor(team2Players.contains(player.id) ? .green : .gray)
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(width: 50)
         }
     }
 }

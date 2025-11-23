@@ -617,14 +617,27 @@ struct CalendarImportConfirmationView: View {
                     Picker("Format", selection: $selectedGameFormat) {
                         Text("Stroke Play").tag("stroke")
                         Text("Stableford").tag("stableford")
-                        // Future formats: Best Ball, Skins
-                        // Text("Best Ball").tag("bestball")
+                        Text("Best Ball").tag("bestball")
+                        Text("Best Ball Match Play").tag("bestball_matchplay")
+                        // Future formats: Skins
                         // Text("Skins").tag("skins")
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.menu)
                     
                     if selectedGameFormat == "stableford" {
                         Text("Points: Double Eagle (5), Eagle (4), Birdie (3), Par (2), Bogey (1), Double Bogey+ (0)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if selectedGameFormat == "bestball" {
+                        Text("Two teams of two players. Each team's score is the best (lowest) net score (with handicaps) from their players on each hole.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if selectedGameFormat == "bestball_matchplay" {
+                        Text("Two teams of two players. Teams compete hole-by-hole using net scores (with handicaps). The team with the better net score wins the hole.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }

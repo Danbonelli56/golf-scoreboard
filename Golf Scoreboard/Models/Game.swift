@@ -20,11 +20,14 @@ final class Game {
     var selectedTeeColor: String? // Override tee color for this game
     var isCompleted: Bool = false // Whether the game is completed and archived
     var gameFormat: String = "stroke" // Game format: "stroke", "stableford", "bestball", "skins"
+    // Team assignments for Best Ball format: "team1:uuid1,uuid2|team2:uuid3,uuid4"
+    // Format: "team1:uuid1,uuid2|team2:uuid3,uuid4" where team1 and team2 are the two teams
+    var teamAssignments_v2: String? // Team assignments stored as string for SwiftData compatibility
     // Use new property name to avoid CloudKit conflict with old binary data
     // Old CloudKit records have "trackingPlayerIDs" as binary data, so we use a new name
     var trackingPlayerIDs_v2: String? // IDs of players who are tracking shots (stored as comma-separated UUID strings)
     
-    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil, gameFormat: String = "stroke") {
+    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil, gameFormat: String = "stroke", teamAssignments: [String: [UUID]]? = nil) {
         self.id = UUID()
         self.course = course
         self.date = date ?? Date()
@@ -35,6 +38,13 @@ final class Game {
         self.gameFormat = gameFormat
         // Convert UUID array to comma-separated string for SwiftData compatibility
         self.trackingPlayerIDs_v2 = trackingPlayerIDs?.map { $0.uuidString }.joined(separator: ",")
+        // Convert team assignments to string format: "team1:uuid1,uuid2|team2:uuid3,uuid4"
+        if let teams = teamAssignments {
+            self.teamAssignments_v2 = teams.map { teamName, playerIDs in
+                let idsString = playerIDs.map { $0.uuidString }.joined(separator: ",")
+                return "\(teamName):\(idsString)"
+            }.joined(separator: "|")
+        }
     }
     
     // Computed properties for safe access to optional arrays
@@ -59,6 +69,199 @@ final class Game {
     var trackingPlayers: [Player] {
         let trackingIDs = trackingPlayerIDsSet
         return playersArray.filter { trackingIDs.contains($0.id) }
+    }
+    
+    // Parse team assignments from string format
+    var teamAssignments: [String: [UUID]] {
+        guard let assignmentsString = teamAssignments_v2, !assignmentsString.isEmpty else {
+            return [:]
+        }
+        
+        var teams: [String: [UUID]] = [:]
+        let teamStrings = assignmentsString.split(separator: "|")
+        
+        for teamString in teamStrings {
+            let parts = teamString.split(separator: ":", maxSplits: 1)
+            if parts.count == 2 {
+                let teamName = String(parts[0])
+                let playerIDs = parts[1].split(separator: ",").compactMap { UUID(uuidString: String($0)) }
+                teams[teamName] = playerIDs
+            }
+        }
+        
+        return teams
+    }
+    
+    // Get players for a specific team
+    func playersForTeam(_ teamName: String) -> [Player] {
+        guard let teamPlayerIDs = teamAssignments[teamName] else {
+            return []
+        }
+        return playersArray.filter { teamPlayerIDs.contains($0.id) }
+    }
+    
+    // Get team names
+    var teamNames: [String] {
+        Array(teamAssignments.keys).sorted()
+    }
+    
+    // Calculate best ball score for a team on a specific hole (gross score)
+    func bestBallScoreForTeam(_ teamName: String, holeNumber: Int) -> Int? {
+        let teamPlayers = playersForTeam(teamName)
+        guard !teamPlayers.isEmpty else { return nil }
+        
+        let holeScore = holesScoresArray.first(where: { $0.holeNumber == holeNumber })
+        guard let hole = holeScore else { return nil }
+        
+        var bestScore: Int? = nil
+        for player in teamPlayers {
+            if let score = hole.scores[player.id] {
+                if bestScore == nil || score < bestScore! {
+                    bestScore = score
+                }
+            }
+        }
+        
+        return bestScore
+    }
+    
+    // Calculate best ball NET score for a team on a specific hole (for match play)
+    func bestBallNetScoreForTeam(_ teamName: String, holeNumber: Int) -> Int? {
+        let teamPlayers = playersForTeam(teamName)
+        guard !teamPlayers.isEmpty else { return nil }
+        
+        guard let course = course,
+              let holes = course.holes,
+              let hole = holes.first(where: { $0.holeNumber == holeNumber }) else {
+            return nil
+        }
+        
+        let holeScore = holesScoresArray.first(where: { $0.holeNumber == holeNumber })
+        guard let holeScoreData = holeScore else { return nil }
+        
+        var bestNetScore: Int? = nil
+        for player in teamPlayers {
+            if let grossScore = holeScoreData.scores[player.id] {
+                // Calculate net score using handicap strokes
+                let strokes = strokesForHole(player: player, holeHandicap: hole.mensHandicap, useHalfHandicap: false)
+                let netScore = max(0, grossScore - strokes)
+                
+                if bestNetScore == nil || netScore < bestNetScore! {
+                    bestNetScore = netScore
+                }
+            }
+        }
+        
+        return bestNetScore
+    }
+    
+    // Determine which team wins a hole in match play (returns team name or nil if tied)
+    func matchPlayHoleWinner(holeNumber: Int) -> String? {
+        guard gameFormat == "bestball_matchplay", teamNames.count == 2 else {
+            return nil
+        }
+        
+        let team1Name = teamNames[0]
+        let team2Name = teamNames[1]
+        
+        guard let team1Net = bestBallNetScoreForTeam(team1Name, holeNumber: holeNumber),
+              let team2Net = bestBallNetScoreForTeam(team2Name, holeNumber: holeNumber) else {
+            return nil
+        }
+        
+        if team1Net < team2Net {
+            return team1Name
+        } else if team2Net < team1Net {
+            return team2Name
+        } else {
+            return nil // Tied hole
+        }
+    }
+    
+    // Calculate match play status
+    var matchPlayStatus: (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String) {
+        guard gameFormat == "bestball_matchplay", teamNames.count == 2 else {
+            return (0, 0, 18, "Not a match play game")
+        }
+        
+        let team1Name = teamNames[0]
+        let team2Name = teamNames[1]
+        
+        var team1Wins = 0
+        var team2Wins = 0
+        var holesPlayed = 0
+        
+        for holeNumber in 1...18 {
+            if let winner = matchPlayHoleWinner(holeNumber: holeNumber) {
+                holesPlayed += 1
+                if winner == team1Name {
+                    team1Wins += 1
+                } else if winner == team2Name {
+                    team2Wins += 1
+                }
+                // Tied holes don't count as wins for either team
+            }
+        }
+        
+        let holesRemaining = 18 - holesPlayed
+        let team1Up = team1Wins - team2Wins
+        let team2Up = team2Wins - team1Wins
+        
+        var status: String
+        if team1Up > 0 {
+            if holesRemaining > 0 && team1Up > holesRemaining {
+                status = "\(team1Name) wins \(team1Up) up"
+            } else if holesRemaining > 0 {
+                status = "\(team1Name) \(team1Up) up with \(holesRemaining) to play"
+            } else {
+                status = "\(team1Name) wins \(team1Up) up"
+            }
+        } else if team2Up > 0 {
+            if holesRemaining > 0 && team2Up > holesRemaining {
+                status = "\(team2Name) wins \(team2Up) up"
+            } else if holesRemaining > 0 {
+                status = "\(team2Name) \(team2Up) up with \(holesRemaining) to play"
+            } else {
+                status = "\(team2Name) wins \(team2Up) up"
+            }
+        } else {
+            if holesRemaining > 0 {
+                status = "All square with \(holesRemaining) to play"
+            } else {
+                status = "Match halved"
+            }
+        }
+        
+        return (team1Up, team2Up, holesRemaining, status)
+    }
+    
+    // Calculate total best ball score for a team
+    func totalBestBallScoreForTeam(_ teamName: String) -> Int {
+        var total = 0
+        for holeNumber in 1...18 {
+            if let score = bestBallScoreForTeam(teamName, holeNumber: holeNumber) {
+                total += score
+            }
+        }
+        return total
+    }
+    
+    // Calculate total best ball NET score for a team (for stroke play)
+    func totalBestBallNetScoreForTeam(_ teamName: String) -> Int {
+        var total = 0
+        for holeNumber in 1...18 {
+            if let score = bestBallNetScoreForTeam(teamName, holeNumber: holeNumber) {
+                total += score
+            }
+        }
+        return total
+    }
+    
+    // Get Best Ball standings (sorted by total NET score, lowest first)
+    var bestBallStandings: [(teamName: String, score: Int)] {
+        return teamNames.map { teamName in
+            (teamName: teamName, score: totalBestBallNetScoreForTeam(teamName))
+        }.sorted { $0.score < $1.score } // Sort by score ascending (lower is better)
     }
     
     // Check if game is completed (all 18 holes have scores for all players)

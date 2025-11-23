@@ -86,6 +86,8 @@ struct ScorecardView: View {
                 if let game = selectedGame {
                     if game.gameFormat == "stableford" {
                         StablefordScorecardView(game: game)
+                    } else if game.gameFormat == "bestball" || game.gameFormat == "bestball_matchplay" {
+                        BestBallScorecardView(game: game)
                     } else {
                         GameScorecardView(game: game)
                     }
