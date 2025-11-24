@@ -81,8 +81,8 @@ struct CalendarImportView: View {
                                     event: event,
                                     courses: courses,
                                     players: players,
-                                    onImport: { [self] course, selectedPlayers, trackingPlayerIDs, gameFormat in
-                                        importGame(course: course, players: selectedPlayers, trackingPlayerIDs: trackingPlayerIDs, gameFormat: gameFormat, event: event)
+                                    onImport: { [self] course, selectedPlayers, trackingPlayerIDs, gameFormat, teamAssignments in
+                                        importGame(course: course, players: selectedPlayers, trackingPlayerIDs: trackingPlayerIDs, gameFormat: gameFormat, teamAssignments: teamAssignments, event: event)
                                     }
                                 )
                             }
@@ -126,7 +126,7 @@ struct CalendarImportView: View {
         golfEvents = await calendarManager.searchGolfEvents()
     }
     
-    func importGame(course: GolfCourse, players: [Player], trackingPlayerIDs: [UUID], gameFormat: String, event: GolfCalendarEvent) {
+    func importGame(course: GolfCourse, players: [Player], trackingPlayerIDs: [UUID], gameFormat: String, teamAssignments: [String: [UUID]]?, event: GolfCalendarEvent) {
         // Use default tee color logic (same as GameSetupView)
         let defaultTeeColor: String? = {
             if let currentUser = players.first(where: { $0.isCurrentUser }),
@@ -155,7 +155,7 @@ struct CalendarImportView: View {
             return trackingPlayerIDs
         }()
         
-        let newGame = Game(course: course, players: players, selectedTeeColor: defaultTeeColor, trackingPlayerIDs: trackingPlayerIDsToUse, gameFormat: gameFormat)
+        let newGame = Game(course: course, players: players, selectedTeeColor: defaultTeeColor, trackingPlayerIDs: trackingPlayerIDsToUse, gameFormat: gameFormat, teamAssignments: teamAssignments)
         
         modelContext.insert(newGame)
         
@@ -175,7 +175,7 @@ struct CalendarEventRow: View {
     let event: GolfCalendarEvent
     let courses: [GolfCourse]
     let players: [Player]
-    let onImport: (GolfCourse, [Player], [UUID], String) -> Void
+    let onImport: (GolfCourse, [Player], [UUID], String, [String: [UUID]]?) -> Void
     
     @State private var showingImportSheet = false
     @State private var matchedCourse: GolfCourse?
@@ -219,14 +219,14 @@ struct CalendarEventRow: View {
         }
         .padding(.vertical, 4)
         .sheet(isPresented: $showingImportSheet) {
-                                CalendarImportConfirmationView(
+            CalendarImportConfirmationView(
                 event: event,
                 matchedCourse: matchedCourse,
                 matchedPlayers: matchedPlayers,
                 allCourses: courses,
                 allPlayers: players,
-                onConfirm: { course, selectedPlayers, trackingPlayers, gameFormat in
-                    onImport(course, selectedPlayers, trackingPlayers, gameFormat)
+                onConfirm: { course, selectedPlayers, trackingPlayers, gameFormat, teamAssignments in
+                    onImport(course, selectedPlayers, trackingPlayers, gameFormat, teamAssignments)
                     showingImportSheet = false
                 },
                 onCancel: {
@@ -528,13 +528,17 @@ struct CalendarImportConfirmationView: View {
     let matchedPlayers: [Player]
     let allCourses: [GolfCourse]
     let allPlayers: [Player]
-    let onConfirm: (GolfCourse, [Player], [UUID], String) -> Void
+    let onConfirm: (GolfCourse, [Player], [UUID], String, [String: [UUID]]?) -> Void
     let onCancel: () -> Void
     
     @State private var selectedCourse: GolfCourse?
     @State private var selectedPlayers: Set<UUID> = []
     @State private var trackingPlayers: Set<UUID> = []
     @State private var selectedGameFormat: String = "stroke"
+    @State private var team1Players: Set<UUID> = []
+    @State private var team2Players: Set<UUID> = []
+    @State private var team1Name: String = "Team 1"
+    @State private var team2Name: String = "Team 2"
     
     var body: some View {
         NavigationView {
@@ -644,6 +648,61 @@ struct CalendarImportConfirmationView: View {
                     }
                 }
                 
+                // Team assignment section for Best Ball
+                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay") && !selectedPlayers.isEmpty {
+                    Section("Team Assignment") {
+                        Text("Select Team 1 or Team 2 for each player. You need 2 players on each team.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        // Team names
+                        HStack {
+                            TextField("Team 1 Name", text: $team1Name)
+                                .textFieldStyle(.roundedBorder)
+                            TextField("Team 2 Name", text: $team2Name)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        
+                        // Column headers
+                        HStack {
+                            Text("Player")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Text("Team 1")
+                                .frame(width: 50)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                            Text("Team 2")
+                                .frame(width: 50)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                        }
+                        .padding(.vertical, 4)
+                        
+                        // Team status
+                        HStack {
+                            Text("Team 1: \(team1Players.count)/2")
+                                .font(.caption)
+                                .foregroundColor(team1Players.count == 2 ? .green : .secondary)
+                            Spacer()
+                            Text("Team 2: \(team2Players.count)/2")
+                                .font(.caption)
+                                .foregroundColor(team2Players.count == 2 ? .green : .secondary)
+                        }
+                        .padding(.bottom, 4)
+                        
+                        // Player list with team selection
+                        ForEach(allPlayers.filter { selectedPlayers.contains($0.id) }) { player in
+                            CalendarTeamSelectionRow(
+                                player: player,
+                                team1Players: $team1Players,
+                                team2Players: $team2Players
+                            )
+                        }
+                    }
+                }
+                
                 // Shot Tracking section (only show when players are selected)
                 if !selectedPlayers.isEmpty {
                     Section("Shot Tracking") {
@@ -701,10 +760,35 @@ struct CalendarImportConfirmationView: View {
                     if let course = selectedCourse {
                         let playersArray = allPlayers.filter { selectedPlayers.contains($0.id) }
                         let trackingPlayerIDsArray = Array(trackingPlayers)
-                        onConfirm(course, playersArray, trackingPlayerIDsArray, selectedGameFormat)
+                        
+                        // Create team assignments for Best Ball
+                        let teamAssignments: [String: [UUID]]? = {
+                            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" {
+                                // Validate team assignments
+                                if selectedPlayers.count != 4 {
+                                    return nil
+                                }
+                                if team1Players.count != 2 || team2Players.count != 2 {
+                                    return nil
+                                }
+                                // Check that all selected players are assigned to a team
+                                let allAssignedPlayers = team1Players.union(team2Players)
+                                if allAssignedPlayers.count != 4 {
+                                    return nil
+                                }
+                                
+                                return [
+                                    team1Name.isEmpty ? "Team 1" : team1Name: Array(team1Players),
+                                    team2Name.isEmpty ? "Team 2" : team2Name: Array(team2Players)
+                                ]
+                            }
+                            return nil
+                        }()
+                        
+                        onConfirm(course, playersArray, trackingPlayerIDsArray, selectedGameFormat, teamAssignments)
                     }
                 }
-                .disabled(selectedCourse == nil || selectedPlayers.isEmpty)
+                .disabled(selectedCourse == nil || selectedPlayers.isEmpty || (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay") && (selectedPlayers.count != 4 || team1Players.count != 2 || team2Players.count != 2))
             )
             .onAppear {
                 // Set matched course if available - do this immediately
@@ -748,6 +832,9 @@ struct CalendarImportConfirmationView: View {
                 }
                 // Remove tracking for players who are no longer selected
                 trackingPlayers = trackingPlayers.filter { newValue.contains($0) }
+                // Remove team assignments for players who are no longer selected
+                team1Players = team1Players.filter { newValue.contains($0) }
+                team2Players = team2Players.filter { newValue.contains($0) }
             }
         }
     }
@@ -885,6 +972,58 @@ struct CalendarImportConfirmationView: View {
         }
         
         return nil
+    }
+}
+
+struct CalendarTeamSelectionRow: View {
+    let player: Player
+    @Binding var team1Players: Set<UUID>
+    @Binding var team2Players: Set<UUID>
+    
+    var body: some View {
+        HStack {
+            // Player name
+            Text(player.name)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            // Team 1 column
+            VStack {
+                Button {
+                    let pid = player.id
+                    if team1Players.contains(pid) {
+                        team1Players.remove(pid)
+                    } else {
+                        team2Players.remove(pid)
+                        team1Players.insert(pid)
+                    }
+                } label: {
+                    Image(systemName: team1Players.contains(player.id) ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundColor(team1Players.contains(player.id) ? .blue : .gray)
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(width: 50)
+            
+            // Team 2 column
+            VStack {
+                Button {
+                    let pid = player.id
+                    if team2Players.contains(pid) {
+                        team2Players.remove(pid)
+                    } else {
+                        team1Players.remove(pid)
+                        team2Players.insert(pid)
+                    }
+                } label: {
+                    Image(systemName: team2Players.contains(player.id) ? "checkmark.circle.fill" : "circle")
+                        .font(.title2)
+                        .foregroundColor(team2Players.contains(player.id) ? .green : .gray)
+                }
+                .buttonStyle(.plain)
+            }
+            .frame(width: 50)
+        }
     }
 }
 
