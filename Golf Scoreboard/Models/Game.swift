@@ -679,6 +679,16 @@ final class Game {
         return calculateScores(holesScores: holesScoresArray, useHalfHandicap: false)
     }
     
+    // Check if a player gets a handicap stroke on a specific hole
+    func playerGetsStrokeOnHole(player: Player, holeNumber: Int, useHalfHandicap: Bool = false) -> Bool {
+        guard let course = course,
+              let holes = course.holes,
+              let hole = holes.first(where: { $0.holeNumber == holeNumber }) else {
+            return false
+        }
+        return strokesForHole(player: player, holeHandicap: hole.mensHandicap, useHalfHandicap: useHalfHandicap) > 0
+    }
+    
     // Calculate how many strokes a player gets on a specific hole based on their handicap
     // Examples:
     // - Handicap 13: 1 stroke on holes with HCP 1-13

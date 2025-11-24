@@ -205,10 +205,19 @@ struct StablefordHoleRow: View {
                                 .fontWeight(.semibold)
                                 .foregroundColor(pointsColor(for: pointsValue))
                         }
+                        
+                        // Show "*" if player gets a stroke
+                        if game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber) {
+                            Text("*")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
                     } else {
-                        Text("-")
+                        // Show "*" instead of "-" if player gets a stroke (even without a score yet)
+                        let getsStroke = game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber)
+                        Text(getsStroke ? "*" : "-")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(getsStroke ? .blue : .secondary)
                     }
                 }
                 .frame(maxWidth: .infinity)

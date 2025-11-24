@@ -156,6 +156,7 @@ struct HoleScoreRow: View {
             ForEach(game.playersArray.sortedWithCurrentUserFirst()) { player in
                 let gross = getScore(for: player)
                 let net = gross != nil ? game.netScoreForHole(player: player, holeNumber: holeNumber) : nil
+                let getsStroke = game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber)
                 
                 VStack(spacing: 2) {
                     if let grossScore = gross {
@@ -167,10 +168,17 @@ struct HoleScoreRow: View {
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
+                        // Show "*" if player gets a stroke
+                        if getsStroke {
+                            Text("*")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
                     } else {
-                        Text("-")
+                        // Show "*" instead of "-" if player gets a stroke (even without a score yet)
+                        Text(getsStroke ? "*" : "-")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(getsStroke ? .blue : .secondary)
                     }
                 }
                 .frame(maxWidth: .infinity)

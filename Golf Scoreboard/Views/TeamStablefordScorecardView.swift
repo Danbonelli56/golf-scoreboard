@@ -229,10 +229,19 @@ struct TeamStablefordHoleRow: View {
                                 .fontWeight(.semibold)
                                 .foregroundColor(pointsColor(for: pointsValue))
                         }
+                        
+                        // Show "*" if player gets a stroke
+                        if game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber) {
+                            Text("*")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
                     } else {
-                        Text("-")
+                        // Show "*" instead of "-" if player gets a stroke (even without a score yet)
+                        let getsStroke = game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber)
+                        Text(getsStroke ? "*" : "-")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(getsStroke ? .blue : .secondary)
                     }
                 }
                 // Team total points for this hole
@@ -275,10 +284,19 @@ struct TeamStablefordHoleRow: View {
                                 .fontWeight(.semibold)
                                 .foregroundColor(pointsColor(for: pointsValue))
                         }
+                        
+                        // Show "*" if player gets a stroke
+                        if game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber) {
+                            Text("*")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
                     } else {
-                        Text("-")
+                        // Show "*" instead of "-" if player gets a stroke (even without a score yet)
+                        let getsStroke = game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber)
+                        Text(getsStroke ? "*" : "-")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(getsStroke ? .blue : .secondary)
                     }
                 }
                 // Team total points for this hole

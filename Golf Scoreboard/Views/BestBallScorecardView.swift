@@ -304,6 +304,7 @@ struct BestBallHoleRow: View {
                 
                 ForEach(team1Players) { player in
                     let score = getScore(for: player)
+                    let getsStroke = game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber)
                     if let scoreValue = score {
                         let isBest = scoreValue == team1Best
                         Text("\(scoreValue)")
@@ -319,10 +320,18 @@ struct BestBallHoleRow: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        
+                        // Show "*" if player gets a stroke
+                        if getsStroke {
+                            Text("*")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
                     } else {
-                        Text("-")
+                        // Show "*" instead of "-" if player gets a stroke (even without a score yet)
+                        Text(getsStroke ? "*" : "-")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(getsStroke ? .blue : .secondary)
                     }
                 }
                 
@@ -355,6 +364,7 @@ struct BestBallHoleRow: View {
                 
                 ForEach(team2Players) { player in
                     let score = getScore(for: player)
+                    let getsStroke = game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber)
                     if let scoreValue = score {
                         let isBest = scoreValue == team2Best
                         Text("\(scoreValue)")
@@ -370,10 +380,18 @@ struct BestBallHoleRow: View {
                                     .foregroundColor(.secondary)
                             }
                         }
+                        
+                        // Show "*" if player gets a stroke
+                        if getsStroke {
+                            Text("*")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
                     } else {
-                        Text("-")
+                        // Show "*" instead of "-" if player gets a stroke (even without a score yet)
+                        Text(getsStroke ? "*" : "-")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(getsStroke ? .blue : .secondary)
                     }
                 }
                 
