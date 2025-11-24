@@ -22,8 +22,9 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     
-    // Player first names for vocabulary (set dynamically)
+    // Player names for vocabulary (set dynamically)
     private var playerFirstNames: [String] = []
+    private var playerFullNames: [String] = []
     
     // Base golf vocabulary - focused on scoring terms and numbers
     private var baseGolfVocabulary: [String] {
@@ -40,26 +41,80 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
     
     // Computed vocabulary that includes player names
     private var golfVocabulary: [String] {
-        baseGolfVocabulary + playerFirstNames
+        // Include both first names and full names for better recognition
+        // Full names are more distinctive and help avoid confusion with common words
+        // Note: Having names multiple times in contextualStrings can help increase their weight
+        var vocabulary = baseGolfVocabulary
+        
+        // Add first names (may add duplicates for short names to increase weight)
+        vocabulary.append(contentsOf: playerFirstNames)
+        
+        // Add full names (more distinctive, less likely to be confused)
+        vocabulary.append(contentsOf: playerFullNames)
+        
+        // For very short first names (3-4 characters), add them again to increase recognition weight
+        // This helps the recognizer prioritize player names over common words like "then", "can", etc.
+        for firstName in playerFirstNames {
+            if firstName.count <= 4 {
+                vocabulary.append(firstName) // Add again to increase weight
+            }
+        }
+        
+        return vocabulary
     }
     
     // Update player names for vocabulary
     func updatePlayerNames(_ players: [String]) {
-        // Extract first names from player names
-        playerFirstNames = players.compactMap { fullName -> String? in
+        var firstNames: [String] = []
+        var fullNames: [String] = []
+        var nameVariations: [String] = []
+        
+        for fullName in players {
             let trimmed = fullName.trimmingCharacters(in: .whitespaces)
-            guard !trimmed.isEmpty else { return nil }
+            guard !trimmed.isEmpty else { continue }
             
-            // Split by space and take first part
+            // Add full name (lowercase) - this is more distinctive
+            fullNames.append(trimmed.lowercased())
+            
+            // Extract first name
             let components = trimmed.components(separatedBy: .whitespaces)
-            let firstName = components.first?.trimmingCharacters(in: .whitespaces) ?? trimmed
+            if let firstName = components.first?.trimmingCharacters(in: .whitespaces), !firstName.isEmpty {
+                let firstNameLower = firstName.lowercased()
+                firstNames.append(firstNameLower)
+                
+                // Add common variations for short names that might be confused
+                // For example, "Dan" might be confused with "then", so we add it multiple times
+                // and in different contexts to increase its weight
+                if firstNameLower.count <= 4 {
+                    // Short names are more likely to be confused, so add them multiple times
+                    // This helps the recognizer prioritize them
+                    nameVariations.append(firstNameLower)
+                    nameVariations.append(firstNameLower)
+                }
+            }
             
-            // Return lowercase for better matching
-            return firstName.lowercased()
+            // Also add last name if available (for cases where first name might be ambiguous)
+            if components.count > 1, let lastName = components.last?.trimmingCharacters(in: .whitespaces), !lastName.isEmpty {
+                fullNames.append(lastName.lowercased())
+            }
         }
+        
         // Remove duplicates while preserving order
         var seen = Set<String>()
-        playerFirstNames = playerFirstNames.filter { seen.insert($0).inserted }
+        playerFirstNames = firstNames.filter { seen.insert($0).inserted }
+        playerFullNames = fullNames.filter { seen.insert($0).inserted }
+        
+        // Add name variations to help with short names
+        // Note: contextualStrings can have duplicates, and having a term multiple times
+        // can help increase its weight in recognition
+        let allNames = playerFirstNames + playerFullNames + nameVariations
+        
+        // Debug: Print vocabulary for troubleshooting
+        print("🗣️ Updated voice vocabulary:")
+        print("   First names: \(playerFirstNames)")
+        print("   Full names: \(playerFullNames)")
+        print("   Total vocabulary size: \(golfVocabulary.count)")
+        print("   All name terms: \(allNames)")
     }
     
     override init() {
@@ -148,9 +203,13 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
         self.recognitionRequest = recognitionRequest
         
         // Add context phrases for better recognition (focused vocabulary)
-        // Limited to: player first names, numbers 1-8, and golf scoring terms
+        // Limited to: player names (first and full), numbers 1-8, and golf scoring terms
+        // IMPORTANT: Set contextual strings AFTER creating the request but BEFORE starting recognition
         if #available(iOS 13.0, *) {
-            recognitionRequest.contextualStrings = golfVocabulary
+            let vocabulary = golfVocabulary
+            recognitionRequest.contextualStrings = vocabulary
+            print("🗣️ Setting contextual strings with \(vocabulary.count) terms")
+            print("   Sample terms: \(vocabulary.prefix(10))")
         }
         
         // Create recognition task

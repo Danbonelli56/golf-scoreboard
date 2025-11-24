@@ -273,6 +273,25 @@ final class Game {
         }.sorted { $0.score < $1.score } // Sort by score ascending (lower is better)
     }
     
+    // Calculate total Stableford points for a team (sum of all players' points)
+    func totalStablefordPointsForTeam(_ teamName: String) -> Int {
+        let teamPlayers = playersForTeam(teamName)
+        var totalPoints = 0
+        
+        for player in teamPlayers {
+            totalPoints += totalStablefordPoints(player: player)
+        }
+        
+        return totalPoints
+    }
+    
+    // Get Team Stableford standings (sorted by total points, highest first)
+    var teamStablefordStandings: [(teamName: String, points: Int)] {
+        return teamNames.map { teamName in
+            (teamName: teamName, points: totalStablefordPointsForTeam(teamName))
+        }.sorted { $0.points > $1.points } // Sort by points descending (higher is better)
+    }
+    
     // Check if game is completed (all 18 holes have scores for all players)
     var isGameCompleted: Bool {
         guard !playersArray.isEmpty else { return false }

@@ -33,8 +33,7 @@ class StablefordSettings: ObservableObject {
     @Published var pointsForDoubleEagle: Int {
         didSet {
             if !isUpdatingFromCloud {
-                store.set(pointsForDoubleEagle, forKey: doubleEagleKey)
-                store.synchronize()
+                saveValue(pointsForDoubleEagle, forKey: doubleEagleKey)
             }
         }
     }
@@ -42,8 +41,7 @@ class StablefordSettings: ObservableObject {
     @Published var pointsForEagle: Int {
         didSet {
             if !isUpdatingFromCloud {
-                store.set(pointsForEagle, forKey: eagleKey)
-                store.synchronize()
+                saveValue(pointsForEagle, forKey: eagleKey)
             }
         }
     }
@@ -51,8 +49,7 @@ class StablefordSettings: ObservableObject {
     @Published var pointsForBirdie: Int {
         didSet {
             if !isUpdatingFromCloud {
-                store.set(pointsForBirdie, forKey: birdieKey)
-                store.synchronize()
+                saveValue(pointsForBirdie, forKey: birdieKey)
             }
         }
     }
@@ -60,8 +57,7 @@ class StablefordSettings: ObservableObject {
     @Published var pointsForPar: Int {
         didSet {
             if !isUpdatingFromCloud {
-                store.set(pointsForPar, forKey: parKey)
-                store.synchronize()
+                saveValue(pointsForPar, forKey: parKey)
             }
         }
     }
@@ -69,8 +65,7 @@ class StablefordSettings: ObservableObject {
     @Published var pointsForBogey: Int {
         didSet {
             if !isUpdatingFromCloud {
-                store.set(pointsForBogey, forKey: bogeyKey)
-                store.synchronize()
+                saveValue(pointsForBogey, forKey: bogeyKey)
             }
         }
     }
@@ -78,14 +73,28 @@ class StablefordSettings: ObservableObject {
     @Published var pointsForDoubleBogey: Int {
         didSet {
             if !isUpdatingFromCloud {
-                store.set(pointsForDoubleBogey, forKey: doubleBogeyKey)
-                store.synchronize()
+                saveValue(pointsForDoubleBogey, forKey: doubleBogeyKey)
             }
         }
     }
     
     // Flag to prevent write loops when updating from cloud
     private var isUpdatingFromCloud = false
+    
+    // Check if iCloud is available
+    private var useiCloud: Bool {
+        FileManager.default.ubiquityIdentityToken != nil
+    }
+    
+    // Save value to appropriate store (iCloud or UserDefaults)
+    private func saveValue(_ value: Int, forKey key: String) {
+        if useiCloud {
+            store.set(value, forKey: key)
+            store.synchronize()
+        } else {
+            UserDefaults.standard.set(value, forKey: key)
+        }
+    }
     
     private init() {
         // Initialize with defaults first (required for @Published properties)
@@ -97,29 +106,47 @@ class StablefordSettings: ObservableObject {
         pointsForBogey = defaultBogey
         pointsForDoubleBogey = defaultDoubleBogey
         
-        // Migrate from UserDefaults if iCloud doesn't have values yet
-        migrateFromUserDefaultsIfNeeded()
+        // Check if iCloud Key-Value Store is available
+        // If not available (e.g., in simulator without proper entitlements), fall back to UserDefaults
+        let useiCloud = FileManager.default.ubiquityIdentityToken != nil
         
-        // Load values from iCloud Key-Value Store, or use defaults
-        pointsForDoubleEagle = store.object(forKey: doubleEagleKey) as? Int ?? defaultDoubleEagle
-        pointsForEagle = store.object(forKey: eagleKey) as? Int ?? defaultEagle
-        pointsForBirdie = store.object(forKey: birdieKey) as? Int ?? defaultBirdie
-        pointsForPar = store.object(forKey: parKey) as? Int ?? defaultPar
-        pointsForBogey = store.object(forKey: bogeyKey) as? Int ?? defaultBogey
-        pointsForDoubleBogey = store.object(forKey: doubleBogeyKey) as? Int ?? defaultDoubleBogey
+        if useiCloud {
+            // Migrate from UserDefaults if iCloud doesn't have values yet
+            migrateFromUserDefaultsIfNeeded()
+            
+            // Load values from iCloud Key-Value Store, or use defaults
+            pointsForDoubleEagle = store.object(forKey: doubleEagleKey) as? Int ?? defaultDoubleEagle
+            pointsForEagle = store.object(forKey: eagleKey) as? Int ?? defaultEagle
+            pointsForBirdie = store.object(forKey: birdieKey) as? Int ?? defaultBirdie
+            pointsForPar = store.object(forKey: parKey) as? Int ?? defaultPar
+            pointsForBogey = store.object(forKey: bogeyKey) as? Int ?? defaultBogey
+            pointsForDoubleBogey = store.object(forKey: doubleBogeyKey) as? Int ?? defaultDoubleBogey
+            
+            // Listen for remote changes from other devices
+            NotificationCenter.default.addObserver(
+                self,
+                selector: #selector(ubiquitousKeyValueStoreDidChange),
+                name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+                object: store
+            )
+        } else {
+            // Fall back to UserDefaults if iCloud is not available
+            let userDefaults = UserDefaults.standard
+            pointsForDoubleEagle = userDefaults.object(forKey: doubleEagleKey) as? Int ?? defaultDoubleEagle
+            pointsForEagle = userDefaults.object(forKey: eagleKey) as? Int ?? defaultEagle
+            pointsForBirdie = userDefaults.object(forKey: birdieKey) as? Int ?? defaultBirdie
+            pointsForPar = userDefaults.object(forKey: parKey) as? Int ?? defaultPar
+            pointsForBogey = userDefaults.object(forKey: bogeyKey) as? Int ?? defaultBogey
+            pointsForDoubleBogey = userDefaults.object(forKey: doubleBogeyKey) as? Int ?? defaultDoubleBogey
+        }
+        
         isUpdatingFromCloud = false
-        
-        // Listen for remote changes from other devices
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(ubiquitousKeyValueStoreDidChange),
-            name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
-            object: store
-        )
     }
     
     // Migrate existing UserDefaults values to iCloud Key-Value Store (one-time migration)
     private func migrateFromUserDefaultsIfNeeded() {
+        guard useiCloud else { return } // Only migrate if iCloud is available
+        
         let userDefaults = UserDefaults.standard
         let migrationKey = "stablefordSettingsMigratedToiCloud"
         
@@ -201,12 +228,14 @@ class StablefordSettings: ObservableObject {
     
     // Reset to defaults
     func resetToDefaults() {
+        isUpdatingFromCloud = true
         pointsForDoubleEagle = defaultDoubleEagle
         pointsForEagle = defaultEagle
         pointsForBirdie = defaultBirdie
         pointsForPar = defaultPar
         pointsForBogey = defaultBogey
         pointsForDoubleBogey = defaultDoubleBogey
+        isUpdatingFromCloud = false
     }
     
     // Calculate points based on score relative to par

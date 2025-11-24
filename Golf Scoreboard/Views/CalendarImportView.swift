@@ -621,6 +621,7 @@ struct CalendarImportConfirmationView: View {
                     Picker("Format", selection: $selectedGameFormat) {
                         Text("Stroke Play").tag("stroke")
                         Text("Stableford").tag("stableford")
+                        Text("Team Stableford").tag("team_stableford")
                         Text("Best Ball").tag("bestball")
                         Text("Best Ball Match Play").tag("bestball_matchplay")
                         // Future formats: Skins
@@ -631,6 +632,13 @@ struct CalendarImportConfirmationView: View {
                     if selectedGameFormat == "stableford" {
                         let settings = StablefordSettings.shared
                         Text("Points: Double Eagle (\(settings.pointsForDoubleEagle)), Eagle (\(settings.pointsForEagle)), Birdie (\(settings.pointsForBirdie)), Par (\(settings.pointsForPar)), Bogey (\(settings.pointsForBogey)), Double Bogey+ (\(settings.pointsForDoubleBogey))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if selectedGameFormat == "team_stableford" {
+                        let settings = StablefordSettings.shared
+                        Text("Two teams of two players. Each team's total Stableford points (sum of both players' points) determines the winner. Points: Double Eagle (\(settings.pointsForDoubleEagle)), Eagle (\(settings.pointsForEagle)), Birdie (\(settings.pointsForBirdie)), Par (\(settings.pointsForPar)), Bogey (\(settings.pointsForBogey)), Double Bogey+ (\(settings.pointsForDoubleBogey))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -648,8 +656,8 @@ struct CalendarImportConfirmationView: View {
                     }
                 }
                 
-                // Team assignment section for Best Ball
-                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay") && !selectedPlayers.isEmpty {
+                // Team assignment section for Best Ball and Team Stableford
+                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford") && !selectedPlayers.isEmpty {
                     Section("Team Assignment") {
                         Text("Select Team 1 or Team 2 for each player. You need 2 players on each team.")
                             .font(.caption)
@@ -761,9 +769,9 @@ struct CalendarImportConfirmationView: View {
                         let playersArray = allPlayers.filter { selectedPlayers.contains($0.id) }
                         let trackingPlayerIDsArray = Array(trackingPlayers)
                         
-                        // Create team assignments for Best Ball
+                        // Create team assignments for Best Ball and Team Stableford
                         let teamAssignments: [String: [UUID]]? = {
-                            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" {
+                            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" {
                                 // Validate team assignments
                                 if selectedPlayers.count != 4 {
                                     return nil
@@ -788,7 +796,7 @@ struct CalendarImportConfirmationView: View {
                         onConfirm(course, playersArray, trackingPlayerIDsArray, selectedGameFormat, teamAssignments)
                     }
                 }
-                .disabled(selectedCourse == nil || selectedPlayers.isEmpty || (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay") && (selectedPlayers.count != 4 || team1Players.count != 2 || team2Players.count != 2))
+                .disabled(selectedCourse == nil || selectedPlayers.isEmpty || (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford") && (selectedPlayers.count != 4 || team1Players.count != 2 || team2Players.count != 2))
             )
             .onAppear {
                 // Set matched course if available - do this immediately

@@ -91,6 +91,10 @@ struct TextInputBar: View {
         if listening {
             voiceManager.stopListening()
         } else {
+            // Ensure vocabulary is up-to-date right before starting to listen
+            if !playerNames.isEmpty {
+                voiceManager.updatePlayerNames(playerNames)
+            }
             Task {
                 do {
                     try await voiceManager.startListening()

@@ -106,6 +106,7 @@ struct GameSetupView: View {
                     Picker("Format", selection: $selectedGameFormat) {
                         Text("Stroke Play").tag("stroke")
                         Text("Stableford").tag("stableford")
+                        Text("Team Stableford").tag("team_stableford")
                         Text("Best Ball").tag("bestball")
                         Text("Best Ball Match Play").tag("bestball_matchplay")
                         // Future formats: Skins
@@ -116,6 +117,13 @@ struct GameSetupView: View {
                     if selectedGameFormat == "stableford" {
                         let settings = StablefordSettings.shared
                         Text("Points: Double Eagle (\(settings.pointsForDoubleEagle)), Eagle (\(settings.pointsForEagle)), Birdie (\(settings.pointsForBirdie)), Par (\(settings.pointsForPar)), Bogey (\(settings.pointsForBogey)), Double Bogey+ (\(settings.pointsForDoubleBogey))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if selectedGameFormat == "team_stableford" {
+                        let settings = StablefordSettings.shared
+                        Text("Two teams of two players. Each team's total Stableford points (sum of both players' points) determines the winner. Points: Double Eagle (\(settings.pointsForDoubleEagle)), Eagle (\(settings.pointsForEagle)), Birdie (\(settings.pointsForBirdie)), Par (\(settings.pointsForPar)), Bogey (\(settings.pointsForBogey)), Double Bogey+ (\(settings.pointsForDoubleBogey))")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -133,8 +141,8 @@ struct GameSetupView: View {
                     }
                 }
                 
-                // Team assignment section for Best Ball
-                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay") && !selectedPlayers.isEmpty {
+                // Team assignment section for Best Ball and Team Stableford
+                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford") && !selectedPlayers.isEmpty {
                     Section("Team Assignment") {
                         Text("Select Team 1 or Team 2 for each player. You need 2 players on each team.")
                             .font(.caption)
@@ -325,10 +333,11 @@ struct GameSetupView: View {
     }
     
     private func startGame() {
-        // Validate Best Ball team assignments
-        if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" {
+        // Validate team-based game assignments
+        if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" {
             if selectedPlayers.count != 4 {
-                teamValidationMessage = "Best Ball requires exactly 4 players. You have \(selectedPlayers.count) players selected."
+                let formatName = selectedGameFormat == "team_stableford" ? "Team Stableford" : "Best Ball"
+                teamValidationMessage = "\(formatName) requires exactly 4 players. You have \(selectedPlayers.count) players selected."
                 showingTeamValidationAlert = true
                 return
             }
@@ -387,9 +396,9 @@ struct GameSetupView: View {
             return Array(trackingPlayers)
         }()
         
-        // Create team assignments for Best Ball
+        // Create team assignments for Best Ball and Team Stableford
         let teamAssignments: [String: [UUID]]? = {
-            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" {
+            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" {
                 // Validate team assignments
                 if selectedPlayers.count != 4 {
                     // Show alert or return nil - for now just return nil
