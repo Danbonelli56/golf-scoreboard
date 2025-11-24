@@ -107,6 +107,7 @@ struct GameSetupView: View {
                         Text("Stroke Play").tag("stroke")
                         Text("Stableford").tag("stableford")
                         Text("Team Stableford").tag("team_stableford")
+                        Text("Two-Man Scramble").tag("scramble")
                         Text("Best Ball").tag("bestball")
                         Text("Best Ball Match Play").tag("bestball_matchplay")
                         // Future formats: Skins
@@ -128,6 +129,12 @@ struct GameSetupView: View {
                             .foregroundColor(.secondary)
                     }
                     
+                    if selectedGameFormat == "scramble" {
+                        Text("Two teams of two players. Each team plays one ball (scramble format). Team handicap is the average of both players' handicaps.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
                     if selectedGameFormat == "bestball" {
                         Text("Two teams of two players. Each team's score is the best (lowest) net score (with handicaps) from their players on each hole.")
                             .font(.caption)
@@ -141,8 +148,8 @@ struct GameSetupView: View {
                     }
                 }
                 
-                // Team assignment section for Best Ball and Team Stableford
-                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford") && !selectedPlayers.isEmpty {
+                // Team assignment section for Best Ball, Team Stableford, and Scramble
+                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble") && !selectedPlayers.isEmpty {
                     Section("Team Assignment") {
                         Text("Select Team 1 or Team 2 for each player. You need 2 players on each team.")
                             .font(.caption)
@@ -334,9 +341,16 @@ struct GameSetupView: View {
     
     private func startGame() {
         // Validate team-based game assignments
-        if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" {
+        if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" {
             if selectedPlayers.count != 4 {
-                let formatName = selectedGameFormat == "team_stableford" ? "Team Stableford" : "Best Ball"
+                let formatName: String
+                if selectedGameFormat == "team_stableford" {
+                    formatName = "Team Stableford"
+                } else if selectedGameFormat == "scramble" {
+                    formatName = "Two-Man Scramble"
+                } else {
+                    formatName = "Best Ball"
+                }
                 teamValidationMessage = "\(formatName) requires exactly 4 players. You have \(selectedPlayers.count) players selected."
                 showingTeamValidationAlert = true
                 return
@@ -396,9 +410,9 @@ struct GameSetupView: View {
             return Array(trackingPlayers)
         }()
         
-        // Create team assignments for Best Ball and Team Stableford
+        // Create team assignments for Best Ball, Team Stableford, and Scramble
         let teamAssignments: [String: [UUID]]? = {
-            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" {
+            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" {
                 // Validate team assignments
                 if selectedPlayers.count != 4 {
                     // Show alert or return nil - for now just return nil

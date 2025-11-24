@@ -292,6 +292,98 @@ final class Game {
         }.sorted { $0.points > $1.points } // Sort by points descending (higher is better)
     }
     
+    // Calculate average handicap for a team (for scramble format)
+    func averageHandicapForTeam(_ teamName: String) -> Double {
+        let teamPlayers = playersForTeam(teamName)
+        guard !teamPlayers.isEmpty else { return 0.0 }
+        
+        let totalHandicap = teamPlayers.reduce(0.0) { $0 + $1.handicap }
+        return totalHandicap / Double(teamPlayers.count)
+    }
+    
+    // Get scramble team score for a hole (one score per team)
+    // In scramble, the team plays one ball, so we store the score under one player per team
+    // We'll use the first player's ID as the team's score identifier
+    func scrambleScoreForTeam(_ teamName: String, holeNumber: Int) -> Int? {
+        let teamPlayers = playersForTeam(teamName)
+        guard let firstPlayer = teamPlayers.first else { return nil }
+        
+        // In scramble, the score is stored under one player (typically the first player)
+        // Check if any player on the team has a score for this hole
+        let holeScore = holesScoresArray.first(where: { $0.holeNumber == holeNumber })
+        guard let hole = holeScore else { return nil }
+        
+        // Return the score for the first player (representing the team's scramble score)
+        return hole.scores[firstPlayer.id]
+    }
+    
+    // Calculate net score for a scramble team on a specific hole
+    func scrambleNetScoreForTeam(_ teamName: String, holeNumber: Int) -> Int? {
+        guard let grossScore = scrambleScoreForTeam(teamName, holeNumber: holeNumber) else {
+            return nil
+        }
+        
+        guard let course = course,
+              let holes = course.holes,
+              let hole = holes.first(where: { $0.holeNumber == holeNumber }) else {
+            return nil
+        }
+        
+        // Calculate strokes based on team's average handicap
+        let teamHandicap = averageHandicapForTeam(teamName)
+        let handicapInt = Int(round(teamHandicap))
+        
+        // Use same logic as strokesForHole(player:holeHandicap:useHalfHandicap:)
+        var strokes: Int
+        if handicapInt <= 18 {
+            strokes = hole.mensHandicap <= handicapInt ? 1 : 0
+        } else {
+            // For handicap > 18: base stroke on all holes + extra on hardest holes
+            let baseStrokes = 1
+            let remainder = handicapInt % 18
+            if remainder > 0 && hole.mensHandicap <= remainder {
+                strokes = baseStrokes + 1
+            } else {
+                strokes = baseStrokes
+            }
+        }
+        
+        let netScore = max(0, grossScore - strokes)
+        return netScore
+    }
+    
+    // Calculate total scramble score for a team (gross)
+    func totalScrambleScoreForTeam(_ teamName: String) -> Int {
+        var total = 0
+        for holeNumber in 1...18 {
+            if let score = scrambleScoreForTeam(teamName, holeNumber: holeNumber) {
+                total += score
+            }
+        }
+        return total
+    }
+    
+    // Calculate total scramble net score for a team
+    func totalScrambleNetScoreForTeam(_ teamName: String) -> Int {
+        var total = 0
+        for holeNumber in 1...18 {
+            if let netScore = scrambleNetScoreForTeam(teamName, holeNumber: holeNumber) {
+                total += netScore
+            }
+        }
+        return total
+    }
+    
+    // Get Scramble standings (sorted by total net score, lowest first)
+    var scrambleStandings: [(teamName: String, grossScore: Int, netScore: Int, handicap: Double)] {
+        return teamNames.map { teamName in
+            (teamName: teamName, 
+             grossScore: totalScrambleScoreForTeam(teamName),
+             netScore: totalScrambleNetScoreForTeam(teamName),
+             handicap: averageHandicapForTeam(teamName))
+        }.sorted { $0.netScore < $1.netScore } // Sort by net score ascending (lower is better)
+    }
+    
     // Check if game is completed (all 18 holes have scores for all players)
     var isGameCompleted: Bool {
         guard !playersArray.isEmpty else { return false }

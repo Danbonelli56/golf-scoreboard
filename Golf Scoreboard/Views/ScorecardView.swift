@@ -88,6 +88,8 @@ struct ScorecardView: View {
                         StablefordScorecardView(game: game)
                     } else if game.gameFormat == "team_stableford" {
                         TeamStablefordScorecardView(game: game)
+                    } else if game.gameFormat == "scramble" {
+                        ScrambleScorecardView(game: game)
                     } else if game.gameFormat == "bestball" || game.gameFormat == "bestball_matchplay" {
                         BestBallScorecardView(game: game)
                     } else {
