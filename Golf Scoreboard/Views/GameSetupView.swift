@@ -110,6 +110,7 @@ struct GameSetupView: View {
                         Text("Two-Man Scramble").tag("scramble")
                         Text("Best Ball").tag("bestball")
                         Text("Best Ball Match Play").tag("bestball_matchplay")
+                        Text("Nassau").tag("nassau")
                         // Future formats: Skins
                         // Text("Skins").tag("skins")
                     }
@@ -146,10 +147,16 @@ struct GameSetupView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    
+                    if selectedGameFormat == "nassau" {
+                        Text("Two teams of two players. Three separate matches: Front 9 (1 point), Back 9 (1 point), and Overall 18 holes (1 point). Scoring same as Best Ball Match Play. Teams can press (start a new bet) when significantly behind.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
-                // Team assignment section for Best Ball, Team Stableford, and Scramble
-                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble") && !selectedPlayers.isEmpty {
+                // Team assignment section for Best Ball, Team Stableford, Scramble, and Nassau
+                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" || selectedGameFormat == "nassau") && !selectedPlayers.isEmpty {
                     Section("Team Assignment") {
                         Text("Select Team 1 or Team 2 for each player. You need 2 players on each team.")
                             .font(.caption)
@@ -341,13 +348,15 @@ struct GameSetupView: View {
     
     private func startGame() {
         // Validate team-based game assignments
-        if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" {
+        if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" || selectedGameFormat == "nassau" {
             if selectedPlayers.count != 4 {
                 let formatName: String
                 if selectedGameFormat == "team_stableford" {
                     formatName = "Team Stableford"
                 } else if selectedGameFormat == "scramble" {
                     formatName = "Two-Man Scramble"
+                } else if selectedGameFormat == "nassau" {
+                    formatName = "Nassau"
                 } else {
                     formatName = "Best Ball"
                 }
@@ -410,9 +419,9 @@ struct GameSetupView: View {
             return Array(trackingPlayers)
         }()
         
-        // Create team assignments for Best Ball, Team Stableford, and Scramble
+        // Create team assignments for Best Ball, Team Stableford, Scramble, and Nassau
         let teamAssignments: [String: [UUID]]? = {
-            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" {
+            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" || selectedGameFormat == "nassau" {
                 // Validate team assignments
                 if selectedPlayers.count != 4 {
                     // Show alert or return nil - for now just return nil

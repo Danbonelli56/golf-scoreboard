@@ -625,6 +625,7 @@ struct CalendarImportConfirmationView: View {
                         Text("Two-Man Scramble").tag("scramble")
                         Text("Best Ball").tag("bestball")
                         Text("Best Ball Match Play").tag("bestball_matchplay")
+                        Text("Nassau").tag("nassau")
                         // Future formats: Skins
                         // Text("Skins").tag("skins")
                     }
@@ -661,10 +662,16 @@ struct CalendarImportConfirmationView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+                    
+                    if selectedGameFormat == "nassau" {
+                        Text("Two teams of two players. Three separate matches: Front 9 (1 point), Back 9 (1 point), and Overall 18 holes (1 point). Scoring same as Best Ball Match Play. Teams can press (start a new bet) when significantly behind.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
-                // Team assignment section for Best Ball, Team Stableford, and Scramble
-                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble") && !selectedPlayers.isEmpty {
+                // Team assignment section for Best Ball, Team Stableford, Scramble, and Nassau
+                if (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" || selectedGameFormat == "nassau") && !selectedPlayers.isEmpty {
                     Section("Team Assignment") {
                         Text("Select Team 1 or Team 2 for each player. You need 2 players on each team.")
                             .font(.caption)
@@ -776,9 +783,9 @@ struct CalendarImportConfirmationView: View {
                         let playersArray = allPlayers.filter { selectedPlayers.contains($0.id) }
                         let trackingPlayerIDsArray = Array(trackingPlayers)
                         
-                        // Create team assignments for Best Ball, Team Stableford, and Scramble
+                        // Create team assignments for Best Ball, Team Stableford, Scramble, and Nassau
                         let teamAssignments: [String: [UUID]]? = {
-                            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" {
+                            if selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" || selectedGameFormat == "nassau" {
                                 // Validate team assignments
                                 if selectedPlayers.count != 4 {
                                     return nil
@@ -803,7 +810,7 @@ struct CalendarImportConfirmationView: View {
                         onConfirm(course, playersArray, trackingPlayerIDsArray, selectedGameFormat, teamAssignments)
                     }
                 }
-                .disabled(selectedCourse == nil || selectedPlayers.isEmpty || (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble") && (selectedPlayers.count != 4 || team1Players.count != 2 || team2Players.count != 2))
+                .disabled(selectedCourse == nil || selectedPlayers.isEmpty || (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" || selectedGameFormat == "nassau") && (selectedPlayers.count != 4 || team1Players.count != 2 || team2Players.count != 2))
             )
             .onAppear {
                 // Set matched course if available - do this immediately

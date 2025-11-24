@@ -26,6 +26,8 @@ final class Game {
     // Use new property name to avoid CloudKit conflict with old binary data
     // Old CloudKit records have "trackingPlayerIDs" as binary data, so we use a new name
     var trackingPlayerIDs_v2: String? // IDs of players who are tracking shots (stored as comma-separated UUID strings)
+    // Presses for Nassau format: "matchType:startingHole:initiatingTeam|..." where matchType is "front9", "back9", or "overall"
+    var nassauPresses: String? // Presses stored as string for SwiftData compatibility
     
     init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil, gameFormat: String = "stroke", teamAssignments: [String: [UUID]]? = nil) {
         self.id = UUID()
@@ -156,8 +158,9 @@ final class Game {
     }
     
     // Determine which team wins a hole in match play (returns team name or nil if tied)
+    // Works for both bestball_matchplay and nassau formats
     func matchPlayHoleWinner(holeNumber: Int) -> String? {
-        guard gameFormat == "bestball_matchplay", teamNames.count == 2 else {
+        guard (gameFormat == "bestball_matchplay" || gameFormat == "nassau"), teamNames.count == 2 else {
             return nil
         }
         
@@ -178,10 +181,10 @@ final class Game {
         }
     }
     
-    // Calculate match play status
-    var matchPlayStatus: (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String) {
-        guard gameFormat == "bestball_matchplay", teamNames.count == 2 else {
-            return (0, 0, 18, "Not a match play game")
+    // Calculate match play status for a range of holes (for Nassau: front 9, back 9, or overall)
+    func matchPlayStatusForHoles(_ holes: ClosedRange<Int>) -> (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String) {
+        guard (gameFormat == "bestball_matchplay" || gameFormat == "nassau"), teamNames.count == 2 else {
+            return (0, 0, holes.count, "Not a match play game")
         }
         
         let team1Name = teamNames[0]
@@ -191,7 +194,7 @@ final class Game {
         var team2Wins = 0
         var holesPlayed = 0
         
-        for holeNumber in 1...18 {
+        for holeNumber in holes {
             // Check if both teams have scores for this hole (hole is played)
             let team1HasScore = bestBallNetScoreForTeam(team1Name, holeNumber: holeNumber) != nil
             let team2HasScore = bestBallNetScoreForTeam(team2Name, holeNumber: holeNumber) != nil
@@ -212,7 +215,7 @@ final class Game {
             }
         }
         
-        let holesRemaining = 18 - holesPlayed
+        let holesRemaining = holes.count - holesPlayed
         let team1Up = team1Wins - team2Wins
         let team2Up = team2Wins - team1Wins
         
@@ -242,6 +245,228 @@ final class Game {
         }
         
         return (team1Up, team2Up, holesRemaining, status)
+    }
+    
+    // Calculate match play status (for bestball_matchplay - uses all 18 holes)
+    var matchPlayStatus: (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String) {
+        guard gameFormat == "bestball_matchplay", teamNames.count == 2 else {
+            return (0, 0, 18, "Not a match play game")
+        }
+        
+        return matchPlayStatusForHoles(1...18)
+    }
+    
+    // Nassau match statuses
+    var nassauFront9Status: (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String) {
+        guard gameFormat == "nassau", teamNames.count == 2 else {
+            return (0, 0, 9, "Not a Nassau game")
+        }
+        return matchPlayStatusForHoles(1...9)
+    }
+    
+    var nassauBack9Status: (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String) {
+        guard gameFormat == "nassau", teamNames.count == 2 else {
+            return (0, 0, 9, "Not a Nassau game")
+        }
+        return matchPlayStatusForHoles(10...18)
+    }
+    
+    var nassauOverallStatus: (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String) {
+        guard gameFormat == "nassau", teamNames.count == 2 else {
+            return (0, 0, 18, "Not a Nassau game")
+        }
+        return matchPlayStatusForHoles(1...18)
+    }
+    
+    // Parse presses from string format
+    var presses: [(matchType: String, startingHole: Int, initiatingTeam: String)] {
+        guard let pressesString = nassauPresses, !pressesString.isEmpty else {
+            return []
+        }
+        
+        var result: [(matchType: String, startingHole: Int, initiatingTeam: String)] = []
+        let pressStrings = pressesString.split(separator: "|")
+        
+        for pressString in pressStrings {
+            let parts = pressString.split(separator: ":")
+            if parts.count == 3,
+               let startingHole = Int(parts[1]) {
+                result.append((
+                    matchType: String(parts[0]),
+                    startingHole: startingHole,
+                    initiatingTeam: String(parts[2])
+                ))
+            }
+        }
+        
+        return result
+    }
+    
+    // Add a press
+    func addPress(matchType: String, startingHole: Int, initiatingTeam: String) {
+        let pressString = "\(matchType):\(startingHole):\(initiatingTeam)"
+        if let existing = nassauPresses, !existing.isEmpty {
+            nassauPresses = "\(existing)|\(pressString)"
+        } else {
+            nassauPresses = pressString
+        }
+    }
+    
+    // Calculate press match status (for a specific press)
+    // Note: Presses are only valid for Front 9 and Back 9 matches, not the Overall match
+    // A press is complete at the end of the match in which it was initiated:
+    // - Front 9 press: starts on startingHole, ends after hole 9
+    // - Back 9 press: starts on startingHole, ends after hole 18
+    func pressMatchStatus(press: (matchType: String, startingHole: Int, initiatingTeam: String)) -> (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String) {
+        guard gameFormat == "nassau", teamNames.count == 2 else {
+            return (0, 0, 0, "Not a Nassau game")
+        }
+        
+        // Determine hole range based on match type and starting hole
+        // The press ends at the end of the match (hole 9 for front9, hole 18 for back9)
+        let holeRange: ClosedRange<Int>
+        switch press.matchType {
+        case "front9":
+            // Front 9 press: from starting hole to hole 9 (end of front 9)
+            holeRange = max(press.startingHole, 1)...9
+        case "back9":
+            // Back 9 press: from starting hole to hole 18 (end of back 9)
+            holeRange = max(press.startingHole, 10)...18
+        case "overall":
+            // Overall presses should not be created, but handle legacy data if it exists
+            holeRange = press.startingHole...18
+        default:
+            return (0, 0, 0, "Invalid press type")
+        }
+        
+        return matchPlayStatusForHoles(holeRange)
+    }
+    
+    // Calculate Nassau points for a team
+    // Each match (Front 9, Back 9, Overall) is worth 1 point
+    // Each press is worth 1 point
+    func nassauPointsForTeam(_ teamName: String) -> Double {
+        guard gameFormat == "nassau", teamNames.count == 2 else {
+            return 0.0
+        }
+        
+        var points: Double = 0.0
+        
+        // Front 9 match: 1 point if won, 0.5 if halved, 0 if lost
+        let front9Status = nassauFront9Status
+        if front9Status.team1HolesUp > 0 && teamName == teamNames[0] {
+            points += 1.0
+        } else if front9Status.team2HolesUp > 0 && teamName == teamNames[1] {
+            points += 1.0
+        } else if front9Status.team1HolesUp == 0 && front9Status.team2HolesUp == 0 && front9Status.holesRemaining == 0 {
+            // Match is halved (completed and all square)
+            points += 0.5
+        }
+        
+        // Back 9 match: 1 point if won, 0.5 if halved, 0 if lost
+        let back9Status = nassauBack9Status
+        if back9Status.team1HolesUp > 0 && teamName == teamNames[0] {
+            points += 1.0
+        } else if back9Status.team2HolesUp > 0 && teamName == teamNames[1] {
+            points += 1.0
+        } else if back9Status.team1HolesUp == 0 && back9Status.team2HolesUp == 0 && back9Status.holesRemaining == 0 {
+            // Match is halved (completed and all square)
+            points += 0.5
+        }
+        
+        // Overall match: 1 point if won, 0.5 if halved, 0 if lost
+        let overallStatus = nassauOverallStatus
+        if overallStatus.team1HolesUp > 0 && teamName == teamNames[0] {
+            points += 1.0
+        } else if overallStatus.team2HolesUp > 0 && teamName == teamNames[1] {
+            points += 1.0
+        } else if overallStatus.team1HolesUp == 0 && overallStatus.team2HolesUp == 0 && overallStatus.holesRemaining == 0 {
+            // Match is halved (completed and all square)
+            points += 0.5
+        }
+        
+        // Presses: 1 point each if won, 0.5 if halved, 0 if lost
+        for press in presses {
+            let pressStatus = pressMatchStatus(press: press)
+            if pressStatus.team1HolesUp > 0 && teamName == teamNames[0] {
+                points += 1.0
+            } else if pressStatus.team2HolesUp > 0 && teamName == teamNames[1] {
+                points += 1.0
+            } else if pressStatus.team1HolesUp == 0 && pressStatus.team2HolesUp == 0 && pressStatus.holesRemaining == 0 {
+                // Press is halved (completed and all square)
+                points += 0.5
+            }
+        }
+        
+        return points
+    }
+    
+    // Find the next hole to be played in a given match
+    func nextHoleForMatch(matchType: String) -> Int? {
+        guard gameFormat == "nassau", teamNames.count == 2 else {
+            return nil
+        }
+        
+        let team1Name = teamNames[0]
+        let team2Name = teamNames[1]
+        
+        let holeRange: ClosedRange<Int>
+        switch matchType {
+        case "front9":
+            holeRange = 1...9
+        case "back9":
+            holeRange = 10...18
+        case "overall":
+            holeRange = 1...18
+        default:
+            return nil
+        }
+        
+        // Find the first hole in the range where both teams don't have scores
+        for holeNumber in holeRange {
+            let team1HasScore = bestBallNetScoreForTeam(team1Name, holeNumber: holeNumber) != nil
+            let team2HasScore = bestBallNetScoreForTeam(team2Name, holeNumber: holeNumber) != nil
+            if !team1HasScore || !team2HasScore {
+                return holeNumber
+            }
+        }
+        
+        // All holes in the match have been played
+        return nil
+    }
+    
+    // Determine which team is losing (can press) in a given match, and by how much
+    func losingTeamForMatch(matchType: String) -> (teamName: String, holesDown: Int)? {
+        guard gameFormat == "nassau", teamNames.count == 2 else {
+            return nil
+        }
+        
+        let status: (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String)
+        switch matchType {
+        case "front9":
+            status = nassauFront9Status
+        case "back9":
+            status = nassauBack9Status
+        case "overall":
+            status = nassauOverallStatus
+        default:
+            return nil
+        }
+        
+        let team1Name = teamNames[0]
+        let team2Name = teamNames[1]
+        
+        // If team2 is up, team1 is losing
+        if status.team2HolesUp > 0 {
+            return (teamName: team1Name, holesDown: status.team2HolesUp)
+        }
+        // If team1 is up, team2 is losing
+        else if status.team1HolesUp > 0 {
+            return (teamName: team2Name, holesDown: status.team1HolesUp)
+        }
+        
+        // Match is all square, no one can press
+        return nil
     }
     
     // Calculate total best ball score for a team

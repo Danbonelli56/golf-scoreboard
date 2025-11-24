@@ -142,14 +142,14 @@ struct ShotStatisticsView: View {
                 .padding(.vertical, 8)
                 .background(Color(.secondarySystemBackground))
                 
-                TabView(selection: $selectedTab) {
-                    // Summary View
-                    List {
+            TabView(selection: $selectedTab) {
+                // Summary View
+                List {
                         // Deduplicate players by ID to prevent duplicate stats
                         ForEach(uniquePlayers.sortedWithCurrentUserFirst()) { player in
-                            Section(header: Text(player.name).font(.headline)) {
-                                let stats = ShotStatistics.calculateStatistics(for: player, shots: validShots)
-                                let overall = ShotStatistics.getOverallStats(for: player, shots: validShots)
+                        Section(header: Text(player.name).font(.headline)) {
+                            let stats = ShotStatistics.calculateStatistics(for: player, shots: validShots)
+                            let overall = ShotStatistics.getOverallStats(for: player, shots: validShots)
                             
                             // Overall stats
                             HStack {
@@ -241,18 +241,18 @@ struct ShotStatisticsView: View {
                             }
                         }
                     }
-                    }
-                    .tabItem {
-                        Label("Summary", systemImage: "list.bullet")
-                    }
-                    .tag(0)
-                    
-                    // Charts View
+                }
+                .tabItem {
+                    Label("Summary", systemImage: "list.bullet")
+                }
+                .tag(0)
+                
+                // Charts View
                     StatisticsChartView(filteredGames: filteredGames, filteredShots: validShots)
-                        .tabItem {
-                            Label("Charts", systemImage: "chart.line.uptrend.xyaxis")
-                        }
-                        .tag(1)
+                    .tabItem {
+                        Label("Charts", systemImage: "chart.line.uptrend.xyaxis")
+                    }
+                    .tag(1)
                 }
             }
             .navigationTitle("Shot Statistics")
@@ -279,7 +279,7 @@ struct ClubStatsRow: View {
             // Special display for Putter
             if stats.isPutter {
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack {
+                HStack {
                         Text("Per Round:")
                         Text(String(format: "%.1f putts", stats.puttsPerRound))
                             .foregroundColor(.blue)
@@ -289,16 +289,16 @@ struct ClubStatsRow: View {
                     }
                     
                     HStack {
-                        Text("Per Hole:")
-                        Text(String(format: "%.2f putts", stats.puttsPerHole))
-                            .foregroundColor(.green)
-                            .fontWeight(.semibold)
-                        
-                        Spacer()
-                        
+                    Text("Per Hole:")
+                    Text(String(format: "%.2f putts", stats.puttsPerHole))
+                        .foregroundColor(.green)
+                        .fontWeight(.semibold)
+                    
+                    Spacer()
+                    
                         Text("\(stats.totalPutts) total")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
+                        .foregroundColor(.secondary)
+                        .font(.caption)
                     }
                     
                     // Direction and distance indicators for putts

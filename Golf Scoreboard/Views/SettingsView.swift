@@ -198,7 +198,7 @@ struct SettingsView: View {
         .sheet(isPresented: $showingAddPlayer) {
             AddPlayerView()
         }
-            .sheet(item: $editingPlayer) { player in
+        .sheet(item: $editingPlayer) { player in
             EditPlayerView(player: player)
         }
         .onAppear {

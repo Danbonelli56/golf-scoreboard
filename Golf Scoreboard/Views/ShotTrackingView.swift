@@ -550,14 +550,14 @@ struct ShotTrackingView: View {
             let hasToHoleWithOvershoot = lowerText.range(of: "\\d+\\s*(?:feet|foot|ft)\\s+to\\s+(?:the\\s+)?hole\\s+\\d+\\s*(?:feet|foot|ft)\\s+(long|short)", options: [.regularExpression, .caseInsensitive]) != nil
             
             if !hasToHoleWithOvershoot, let feetPattern = try? NSRegularExpression(pattern: "(\\d+)\\s*(feet|foot|ft)", options: .caseInsensitive),
-               let match = feetPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
-               let feetRange = Range(match.range(at: 1), in: lowerText),
-               let feet = Int(String(lowerText[feetRange])) {
-                distanceFeet = feet
-                // Store internally as yards (rounded)
-                let yards = Int(round(Double(feet) / 3.0))
-                distance = yards
-                print("✅ Found distance (feet): \(feet)ft -> ~\(yards)yds")
+           let match = feetPattern.firstMatch(in: lowerText, range: NSRange(lowerText.startIndex..., in: lowerText)),
+           let feetRange = Range(match.range(at: 1), in: lowerText),
+           let feet = Int(String(lowerText[feetRange])) {
+            distanceFeet = feet
+            // Store internally as yards (rounded)
+            let yards = Int(round(Double(feet) / 3.0))
+            distance = yards
+            print("✅ Found distance (feet): \(feet)ft -> ~\(yards)yds")
             }
         }
         // Pattern 3: "228 to hole" or "to hole 228" - distance to hole
@@ -917,16 +917,16 @@ struct ShotTrackingView: View {
                     }
                 } else {
                     // No overshoot specified - use legacy logic
-                    let yardsFromFeet = Double(feet) / 3.0
-                    if pending.isLong {
-                        // Ball went past the hole - previous shot traveled MORE (went yardsFromFeet beyond hole)
-                        effectiveCurrent = -yardsFromFeet
+                let yardsFromFeet = Double(feet) / 3.0
+                if pending.isLong {
+                    // Ball went past the hole - previous shot traveled MORE (went yardsFromFeet beyond hole)
+                    effectiveCurrent = -yardsFromFeet
                         print("⛳ Putt was \(feet)ft long (legacy), previous shot was \(String(format: "%.1f", yardsFromFeet))yds beyond the hole.")
-                    } else if pending.isShort {
-                        // Ball stopped short - previous shot traveled LESS (stopped yardsFromFeet short of hole)
-                        effectiveCurrent = yardsFromFeet
+                } else if pending.isShort {
+                    // Ball stopped short - previous shot traveled LESS (stopped yardsFromFeet short of hole)
+                    effectiveCurrent = yardsFromFeet
                         print("⛳ Putt was \(feet)ft short (legacy), previous shot was \(String(format: "%.1f", yardsFromFeet))yds short of the hole.")
-                    } else {
+                } else {
                         // Normal putt - holed it (ball ended at hole = 0 yards)
                         effectiveCurrent = 0.0
                         print("⛳ Normal putt: \(feet)ft - holed (ball at hole = 0yds)")
@@ -952,8 +952,8 @@ struct ShotTrackingView: View {
                 print("⚠️ Warning: Calculated negative distance traveled (\(traveled)yds). Using 0 instead.")
                 prev.distanceTraveled = 0
             } else {
-                prev.distanceTraveled = traveled
-                print("📏 Updated previous Shot #\(prev.shotNumber): \(prevRemaining)yds - \(effectiveCurrent)yds = \(traveled)yds")
+            prev.distanceTraveled = traveled
+            print("📏 Updated previous Shot #\(prev.shotNumber): \(prevRemaining)yds - \(effectiveCurrent)yds = \(traveled)yds")
             }
         }
         
@@ -1128,12 +1128,12 @@ struct ShotTrackingView: View {
                             shot.distanceTraveled = 0
                         }
                     } else {
-                        // Only update if distanceTraveled is nil (hasn't been set with putt adjustments)
-                        if shot.distanceTraveled == nil {
-                            shot.distanceTraveled = traveled
-                            print("📏 Recalculated Shot #\(shot.shotNumber): \(currentDistance)yds - \(nextDistance)yds = \(traveled)yds")
-                        } else {
-                            print("📏 Skipping recalculation for Shot #\(shot.shotNumber) (already set with putt adjustment)")
+                    // Only update if distanceTraveled is nil (hasn't been set with putt adjustments)
+                    if shot.distanceTraveled == nil {
+                        shot.distanceTraveled = traveled
+                        print("📏 Recalculated Shot #\(shot.shotNumber): \(currentDistance)yds - \(nextDistance)yds = \(traveled)yds")
+                    } else {
+                        print("📏 Skipping recalculation for Shot #\(shot.shotNumber) (already set with putt adjustment)")
                         }
                     }
                 }

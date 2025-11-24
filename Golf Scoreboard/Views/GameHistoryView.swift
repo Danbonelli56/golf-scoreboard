@@ -55,7 +55,7 @@ struct GameHistoryView: View {
                     List {
                         ForEach(completedGames) { game in
                             NavigationLink(destination: GameDetailView(game: game)) {
-                                GameHistoryRow(game: game)
+                        GameHistoryRow(game: game)
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
@@ -64,7 +64,7 @@ struct GameHistoryView: View {
                                     Label("Delete", systemImage: "trash")
                                 }
                             }
-                        }
+                            }
                     }
                 }
             }

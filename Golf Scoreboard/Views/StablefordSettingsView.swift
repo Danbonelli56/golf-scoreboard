@@ -8,22 +8,7 @@
 import SwiftUI
 
 struct StablefordSettingsView: View {
-    @State private var doubleEaglePoints: Int
-    @State private var eaglePoints: Int
-    @State private var birdiePoints: Int
-    @State private var parPoints: Int
-    @State private var bogeyPoints: Int
-    @State private var doubleBogeyPoints: Int
-    
-    init() {
-        let settings = StablefordSettings.shared
-        _doubleEaglePoints = State(initialValue: settings.pointsForDoubleEagle)
-        _eaglePoints = State(initialValue: settings.pointsForEagle)
-        _birdiePoints = State(initialValue: settings.pointsForBirdie)
-        _parPoints = State(initialValue: settings.pointsForPar)
-        _bogeyPoints = State(initialValue: settings.pointsForBogey)
-        _doubleBogeyPoints = State(initialValue: settings.pointsForDoubleBogey)
-    }
+    @ObservedObject private var settings = StablefordSettings.shared
     
     var body: some View {
         Form {
@@ -36,6 +21,11 @@ struct StablefordSettingsView: View {
                     Text("Default values: Double Eagle = 5, Eagle = 4, Birdie = 3, Par = 2, Bogey = 1, Double Bogey+ = 0")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    
+                    Text("Settings sync automatically via iCloud across your devices.")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .padding(.top, 4)
                 }
                 .padding(.vertical, 4)
             } header: {
@@ -46,44 +36,46 @@ struct StablefordSettingsView: View {
                 PointValueRow(
                     label: "Double Eagle or Better",
                     description: "3 or more under par",
-                    value: $doubleEaglePoints
+                    value: $settings.pointsForDoubleEagle
                 )
                 
                 PointValueRow(
                     label: "Eagle",
                     description: "2 under par",
-                    value: $eaglePoints
+                    value: $settings.pointsForEagle
                 )
                 
                 PointValueRow(
                     label: "Birdie",
                     description: "1 under par",
-                    value: $birdiePoints
+                    value: $settings.pointsForBirdie
                 )
                 
                 PointValueRow(
                     label: "Par",
                     description: "Even par",
-                    value: $parPoints
+                    value: $settings.pointsForPar
                 )
                 
                 PointValueRow(
                     label: "Bogey",
                     description: "1 over par",
-                    value: $bogeyPoints
+                    value: $settings.pointsForBogey
                 )
                 
                 PointValueRow(
                     label: "Double Bogey or Worse",
                     description: "2 or more over par",
-                    value: $doubleBogeyPoints
+                    value: $settings.pointsForDoubleBogey
                 )
             } header: {
                 Text("Point Values")
             }
             
             Section {
-                Button(action: resetToDefaults) {
+                Button(action: {
+                    settings.resetToDefaults()
+                }) {
                     HStack {
                         Spacer()
                         Text("Reset to Defaults")
@@ -95,29 +87,6 @@ struct StablefordSettingsView: View {
         }
         .navigationTitle("Stableford Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear {
-            saveSettings()
-        }
-    }
-    
-    private func saveSettings() {
-        let settings = StablefordSettings.shared
-        settings.pointsForDoubleEagle = doubleEaglePoints
-        settings.pointsForEagle = eaglePoints
-        settings.pointsForBirdie = birdiePoints
-        settings.pointsForPar = parPoints
-        settings.pointsForBogey = bogeyPoints
-        settings.pointsForDoubleBogey = doubleBogeyPoints
-    }
-    
-    private func resetToDefaults() {
-        doubleEaglePoints = 5
-        eaglePoints = 4
-        birdiePoints = 3
-        parPoints = 2
-        bogeyPoints = 1
-        doubleBogeyPoints = 0
-        saveSettings()
     }
 }
 
