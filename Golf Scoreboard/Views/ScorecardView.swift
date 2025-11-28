@@ -94,6 +94,8 @@ struct ScorecardView: View {
                         NassauScorecardView(game: game)
                     } else if game.gameFormat == "bestball" || game.gameFormat == "bestball_matchplay" {
                         BestBallScorecardView(game: game)
+                    } else if game.gameFormat == "skins" {
+                        SkinsScorecardView(game: game)
                     } else {
                     GameScorecardView(game: game)
                     }

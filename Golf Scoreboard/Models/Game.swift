@@ -28,8 +28,10 @@ final class Game {
     var trackingPlayerIDs_v2: String? // IDs of players who are tracking shots (stored as comma-separated UUID strings)
     // Presses for Nassau format: "matchType:startingHole:initiatingTeam|..." where matchType is "front9", "back9", or "overall"
     var nassauPresses: String? // Presses stored as string for SwiftData compatibility
+    // Value per skin for Skins format
+    var skinsValuePerSkin: Double? // Amount each skin is worth (stored as optional for backward compatibility)
     
-    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil, gameFormat: String = "stroke", teamAssignments: [String: [UUID]]? = nil) {
+    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil, gameFormat: String = "stroke", teamAssignments: [String: [UUID]]? = nil, skinsValuePerSkin: Double? = nil) {
         self.id = UUID()
         self.course = course
         self.date = date ?? Date()
@@ -38,6 +40,7 @@ final class Game {
         self.createdAt = nil
         self.selectedTeeColor = selectedTeeColor
         self.gameFormat = gameFormat
+        self.skinsValuePerSkin = skinsValuePerSkin
         // Convert UUID array to comma-separated string for SwiftData compatibility
         self.trackingPlayerIDs_v2 = trackingPlayerIDs?.map { $0.uuidString }.joined(separator: ",")
         // Convert team assignments to string format: "team1:uuid1,uuid2|team2:uuid3,uuid4"
@@ -813,6 +816,148 @@ final class Game {
             let net = playerNetTotals[player.id] ?? 0
             return (player: player, gross: gross, net: net)
         }
+    }
+    
+    // MARK: - Skins Game Calculations
+    
+    // Get the winner of a skin for a specific hole (based on net score)
+    // Returns the player with the lowest net score, or nil if there's a tie (carryover)
+    func skinsWinnerForHole(_ holeNumber: Int) -> Player? {
+        guard gameFormat == "skins" else { return nil }
+        
+        var bestNetScore: Int?
+        var winner: Player?
+        var isTie = false
+        
+        for player in playersArray {
+            guard let netScore = netScoreForHole(player: player, holeNumber: holeNumber) else {
+                continue // Player doesn't have a score for this hole yet
+            }
+            
+            if bestNetScore == nil || netScore < bestNetScore! {
+                // New best score
+                bestNetScore = netScore
+                winner = player
+                isTie = false
+            } else if netScore == bestNetScore {
+                // Tie for best score - no winner (carryover)
+                isTie = true
+                winner = nil
+            }
+        }
+        
+        // If there's a tie, return nil (carryover)
+        return isTie ? nil : winner
+    }
+    
+    // Calculate how many skins are carrying over to a specific hole
+    // This counts all previous holes that were tied (carryovers)
+    func skinsCarryoverForHole(_ holeNumber: Int) -> Int {
+        guard gameFormat == "skins" else { return 0 }
+        
+        var carryover = 0
+        
+        // Count carryovers from previous holes (holes 1 to holeNumber-1)
+        for prevHole in 1..<holeNumber {
+            if skinsWinnerForHole(prevHole) == nil {
+                // Previous hole was tied, so it carries over
+                carryover += 1
+            }
+        }
+        
+        return carryover
+    }
+    
+    // Get total skins won per player
+    func skinsPerPlayer() -> [UUID: Int] {
+        guard gameFormat == "skins" else { return [:] }
+        
+        var skins: [UUID: Int] = [:]
+        
+        // Initialize all players with 0 skins
+        for player in playersArray {
+            skins[player.id] = 0
+        }
+        
+        // Track accumulated carryover skins
+        var accumulatedCarryover = 0
+        
+        // Count skins won per player
+        for holeNumber in 1...18 {
+            if let winner = skinsWinnerForHole(holeNumber) {
+                // This hole has a winner - they get all accumulated carryover skins plus this hole's skin
+                let totalSkinsForHole = accumulatedCarryover + 1
+                skins[winner.id, default: 0] += totalSkinsForHole
+                // Reset carryover since it was consumed
+                accumulatedCarryover = 0
+            } else {
+                // This hole is tied - add to carryover
+                accumulatedCarryover += 1
+            }
+        }
+        
+        return skins
+    }
+    
+    // Calculate net payouts per player (positive = won money, negative = lost money)
+    // Each player pays each other player: (other player's skins - this player's skins) × value per skin
+    // If the difference is negative, no payment is made (the other player pays instead)
+    // Net payout = sum of what player receives from others - sum of what player pays to others
+    func skinsPayouts() -> [UUID: Double] {
+        guard gameFormat == "skins",
+              let valuePerSkin = skinsValuePerSkin,
+              valuePerSkin > 0 else {
+            return [:]
+        }
+        
+        let skins = skinsPerPlayer()
+        
+        // Calculate total skins won
+        let totalSkinsWon = skins.values.reduce(0, +)
+        
+        guard totalSkinsWon > 0 else {
+            // No skins won yet, no payouts
+            var payouts: [UUID: Double] = [:]
+            for player in playersArray {
+                payouts[player.id] = 0.0
+            }
+            return payouts
+        }
+        
+        // Initialize payouts to zero
+        var payouts: [UUID: Double] = [:]
+        for player in playersArray {
+            payouts[player.id] = 0.0
+        }
+        
+        // Calculate player-to-player payments
+        for i in 0..<playersArray.count {
+            let player1 = playersArray[i]
+            let player1Skins = skins[player1.id] ?? 0
+            let player1Value = Double(player1Skins) * valuePerSkin
+            
+            for j in (i+1)..<playersArray.count {
+                let player2 = playersArray[j]
+                let player2Skins = skins[player2.id] ?? 0
+                let player2Value = Double(player2Skins) * valuePerSkin
+                
+                // Calculate the difference
+                let difference = player2Value - player1Value
+                
+                if difference > 0 {
+                    // Player 1 pays Player 2
+                    payouts[player1.id] = (payouts[player1.id] ?? 0.0) - difference
+                    payouts[player2.id] = (payouts[player2.id] ?? 0.0) + difference
+                } else if difference < 0 {
+                    // Player 2 pays Player 1
+                    payouts[player2.id] = (payouts[player2.id] ?? 0.0) + difference // difference is negative
+                    payouts[player1.id] = (payouts[player1.id] ?? 0.0) - difference // -difference is positive
+                }
+                // If difference == 0, no payment needed
+            }
+        }
+        
+        return payouts
     }
 }
 

@@ -30,6 +30,7 @@ struct GameSetupView: View {
     @State private var team2Name: String = "Team 2"
     @State private var showingTeamValidationAlert = false
     @State private var teamValidationMessage = ""
+    @State private var skinsValuePerSkin: String = ""
     
     private var availableTeeColors: [String] {
         guard let course = selectedCourse else { return [] }
@@ -111,8 +112,7 @@ struct GameSetupView: View {
                         Text("Best Ball").tag("bestball")
                         Text("Best Ball Match Play").tag("bestball_matchplay")
                         Text("Nassau").tag("nassau")
-                        // Future formats: Skins
-                        // Text("Skins").tag("skins")
+                        Text("Skins").tag("skins")
                     }
                     .pickerStyle(.menu)
                     
@@ -150,6 +150,24 @@ struct GameSetupView: View {
                     
                     if selectedGameFormat == "nassau" {
                         Text("Two teams of two players. Three separate matches: Front 9 (1 point), Back 9 (1 point), and Overall 18 holes (1 point). Scoring same as Best Ball Match Play. Teams can press (start a new bet) when significantly behind.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if selectedGameFormat == "skins" {
+                        Text("Player with lowest net score on each hole wins the skin. If tied, the skin carries over to the next hole. Winner claims all accumulated skins for that hole.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                // Value per skin section for Skins
+                if selectedGameFormat == "skins" {
+                    Section("Skin Value") {
+                        TextField("Value per skin", text: $skinsValuePerSkin)
+                            .keyboardType(.decimalPad)
+                            .textFieldStyle(.roundedBorder)
+                        Text("Enter the value of each skin (e.g., 5.00 for $5 per skin). Total pot = skins awarded × value per skin.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -445,7 +463,15 @@ struct GameSetupView: View {
             return nil
         }()
         
-        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse, trackingPlayerIDs: trackingPlayerIDsArray, gameFormat: selectedGameFormat, teamAssignments: teamAssignments)
+        // Get skins value per skin if Skins format
+        let valuePerSkin: Double? = {
+            if selectedGameFormat == "skins", !skinsValuePerSkin.isEmpty {
+                return Double(skinsValuePerSkin)
+            }
+            return nil
+        }()
+        
+        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse, trackingPlayerIDs: trackingPlayerIDsArray, gameFormat: selectedGameFormat, teamAssignments: teamAssignments, skinsValuePerSkin: valuePerSkin)
         
         // Only one game can be active at a time
         modelContext.insert(newGame)

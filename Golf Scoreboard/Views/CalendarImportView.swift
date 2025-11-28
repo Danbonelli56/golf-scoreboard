@@ -81,8 +81,8 @@ struct CalendarImportView: View {
                                     event: event,
                                     courses: courses,
                                     players: players,
-                                    onImport: { [self] course, selectedPlayers, trackingPlayerIDs, gameFormat, teamAssignments in
-                                        importGame(course: course, players: selectedPlayers, trackingPlayerIDs: trackingPlayerIDs, gameFormat: gameFormat, teamAssignments: teamAssignments, event: event)
+                                    onImport: { [self] course, selectedPlayers, trackingPlayerIDs, gameFormat, teamAssignments, skinsValuePerSkin in
+                                        importGame(course: course, players: selectedPlayers, trackingPlayerIDs: trackingPlayerIDs, gameFormat: gameFormat, teamAssignments: teamAssignments, skinsValuePerSkin: skinsValuePerSkin, event: event)
                                     }
                                 )
                             }
@@ -126,7 +126,7 @@ struct CalendarImportView: View {
         golfEvents = await calendarManager.searchGolfEvents()
     }
     
-    func importGame(course: GolfCourse, players: [Player], trackingPlayerIDs: [UUID], gameFormat: String, teamAssignments: [String: [UUID]]?, event: GolfCalendarEvent) {
+    func importGame(course: GolfCourse, players: [Player], trackingPlayerIDs: [UUID], gameFormat: String, teamAssignments: [String: [UUID]]?, skinsValuePerSkin: Double?, event: GolfCalendarEvent) {
         // Use default tee color logic (same as GameSetupView)
         let defaultTeeColor: String? = {
             if let currentUser = players.first(where: { $0.isCurrentUser }),
@@ -155,7 +155,7 @@ struct CalendarImportView: View {
             return trackingPlayerIDs
         }()
         
-        let newGame = Game(course: course, players: players, selectedTeeColor: defaultTeeColor, trackingPlayerIDs: trackingPlayerIDsToUse, gameFormat: gameFormat, teamAssignments: teamAssignments)
+        let newGame = Game(course: course, players: players, selectedTeeColor: defaultTeeColor, trackingPlayerIDs: trackingPlayerIDsToUse, gameFormat: gameFormat, teamAssignments: teamAssignments, skinsValuePerSkin: skinsValuePerSkin)
         
         modelContext.insert(newGame)
         
@@ -175,7 +175,7 @@ struct CalendarEventRow: View {
     let event: GolfCalendarEvent
     let courses: [GolfCourse]
     let players: [Player]
-    let onImport: (GolfCourse, [Player], [UUID], String, [String: [UUID]]?) -> Void
+    let onImport: (GolfCourse, [Player], [UUID], String, [String: [UUID]]?, Double?) -> Void // Last parameter is skinsValuePerSkin
     
     @State private var showingImportSheet = false
     @State private var matchedCourse: GolfCourse?
@@ -225,8 +225,8 @@ struct CalendarEventRow: View {
                 matchedPlayers: matchedPlayers,
                 allCourses: courses,
                 allPlayers: players,
-                onConfirm: { course, selectedPlayers, trackingPlayers, gameFormat, teamAssignments in
-                    onImport(course, selectedPlayers, trackingPlayers, gameFormat, teamAssignments)
+                onConfirm: { course, selectedPlayers, trackingPlayers, gameFormat, teamAssignments, skinsBetAmount in
+                    onImport(course, selectedPlayers, trackingPlayers, gameFormat, teamAssignments, skinsBetAmount)
                     showingImportSheet = false
                 },
                 onCancel: {
@@ -528,7 +528,7 @@ struct CalendarImportConfirmationView: View {
     let matchedPlayers: [Player]
     let allCourses: [GolfCourse]
     let allPlayers: [Player]
-    let onConfirm: (GolfCourse, [Player], [UUID], String, [String: [UUID]]?) -> Void
+    let onConfirm: (GolfCourse, [Player], [UUID], String, [String: [UUID]]?, Double?) -> Void // Last parameter is skinsValuePerSkin
     let onCancel: () -> Void
     
     @State private var selectedCourse: GolfCourse?
@@ -539,6 +539,7 @@ struct CalendarImportConfirmationView: View {
     @State private var team2Players: Set<UUID> = []
     @State private var team1Name: String = "Team 1"
     @State private var team2Name: String = "Team 2"
+    @State private var skinsValuePerSkin: String = ""
     
     var body: some View {
         NavigationView {
@@ -626,8 +627,7 @@ struct CalendarImportConfirmationView: View {
                         Text("Best Ball").tag("bestball")
                         Text("Best Ball Match Play").tag("bestball_matchplay")
                         Text("Nassau").tag("nassau")
-                        // Future formats: Skins
-                        // Text("Skins").tag("skins")
+                        Text("Skins").tag("skins")
                     }
                     .pickerStyle(.menu)
                     
@@ -665,6 +665,24 @@ struct CalendarImportConfirmationView: View {
                     
                     if selectedGameFormat == "nassau" {
                         Text("Two teams of two players. Three separate matches: Front 9 (1 point), Back 9 (1 point), and Overall 18 holes (1 point). Scoring same as Best Ball Match Play. Teams can press (start a new bet) when significantly behind.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    if selectedGameFormat == "skins" {
+                        Text("Player with lowest net score on each hole wins the skin. If tied, the skin carries over to the next hole. Winner claims all accumulated skins for that hole.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                // Value per skin section for Skins
+                if selectedGameFormat == "skins" {
+                    Section("Skin Value") {
+                        TextField("Value per skin", text: $skinsValuePerSkin)
+                            .keyboardType(.decimalPad)
+                            .textFieldStyle(.roundedBorder)
+                        Text("Enter the value of each skin (e.g., 5.00 for $5 per skin). Total pot = skins awarded × value per skin.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -807,7 +825,15 @@ struct CalendarImportConfirmationView: View {
                             return nil
                         }()
                         
-                        onConfirm(course, playersArray, trackingPlayerIDsArray, selectedGameFormat, teamAssignments)
+                        // Get skins value per skin if Skins format
+                        let valuePerSkin: Double? = {
+                            if selectedGameFormat == "skins", !skinsValuePerSkin.isEmpty {
+                                return Double(skinsValuePerSkin)
+                            }
+                            return nil
+                        }()
+                        
+                        onConfirm(course, playersArray, trackingPlayerIDsArray, selectedGameFormat, teamAssignments, valuePerSkin)
                     }
                 }
                 .disabled(selectedCourse == nil || selectedPlayers.isEmpty || (selectedGameFormat == "bestball" || selectedGameFormat == "bestball_matchplay" || selectedGameFormat == "team_stableford" || selectedGameFormat == "scramble" || selectedGameFormat == "nassau") && (selectedPlayers.count != 4 || team1Players.count != 2 || team2Players.count != 2))
