@@ -198,7 +198,7 @@ struct SkinsHoleScoreRow: View {
                 let net = gross != nil ? game.netScoreForHole(player: player, holeNumber: holeNumber) : nil
                 let getsStroke = game.playerGetsStrokeOnHole(player: player, holeNumber: holeNumber)
                 let isSkinWinner = game.skinsWinnerForHole(holeNumber)?.id == player.id
-                let isCarryover = game.skinsWinnerForHole(holeNumber) == nil && gross != nil
+                let isCarryover = game.skinsWinnerForHole(holeNumber) == nil && gross != nil && game.skinsCarryoverEnabled
                 
                 VStack(spacing: 2) {
                     if let grossScore = gross {
