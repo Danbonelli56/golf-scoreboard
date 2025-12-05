@@ -77,14 +77,32 @@ struct SkinsScorecardView: View {
                         Spacer()
                     }
                     
-                    // Value per skin display
-                    if let valuePerSkin = game.skinsValuePerSkin {
+                    // Pot information display
+                    if let potPerPlayer = game.skinsPotPerPlayer, potPerPlayer > 0 {
+                        if let totalPot = game.skinsTotalPot {
+                            HStack {
+                                Text("Pot: $\(totalPot, specifier: "%.2f") ($\(potPerPlayer, specifier: "%.2f") per player)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+                        }
+                    } else if let valuePerSkin = game.skinsValuePerSkin {
+                        // Fallback to old system for backward compatibility
                         HStack {
                             Text("Value: $\(valuePerSkin, specifier: "%.2f") per skin")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                             Spacer()
                         }
+                    }
+                    
+                    // Carryover setting display
+                    HStack {
+                        Text("Carryover: \(game.skinsCarryoverEnabled ? "Enabled" : "Disabled")")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Spacer()
                     }
                 }
                 .padding()
@@ -343,8 +361,8 @@ struct SkinsSummaryView: View {
             .padding(.vertical, 8)
             .background(Color(.secondarySystemBackground))
             
-            // Payouts (if value per skin is set)
-            if let valuePerSkin = game.skinsValuePerSkin, valuePerSkin > 0 {
+            // Payouts (if pot per player is set or value per skin for backward compatibility)
+            if (game.skinsPotPerPlayer != nil && game.skinsPotPerPlayer! > 0) || (game.skinsValuePerSkin != nil && game.skinsValuePerSkin! > 0) {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Net Payout")
                         .font(.subheadline)
@@ -368,8 +386,6 @@ struct SkinsSummaryView: View {
                     // Total pot info
                     let totalSkins = skins.values.reduce(0, +)
                     if totalSkins > 0 {
-                        let totalPot = Double(totalSkins) * valuePerSkin
-                        
                         Divider()
                             .padding(.horizontal)
                         HStack {
@@ -383,19 +399,75 @@ struct SkinsSummaryView: View {
                         }
                         .padding(.horizontal)
                         
-                        HStack {
-                            Text("Value per Skin:")
-                                .font(.caption)
+                        // Show pot-based calculation if using new system
+                        if let potPerPlayer = game.skinsPotPerPlayer, potPerPlayer > 0, let totalPot = game.skinsTotalPot {
+                            if let valuePerSkin = game.skinsCalculatedValuePerSkin {
+                                HStack {
+                                    Text("Total Pot:")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Text("$\(totalPot, specifier: "%.2f")")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                }
+                                .padding(.horizontal)
+                                
+                                HStack {
+                                    Text("Value per Skin:")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Spacer()
+                                    Text("$\(valuePerSkin, specifier: "%.2f")")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                }
+                                .padding(.horizontal)
+                                
+                                Text("Pot divided by number of skins awarded")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal)
+                                    .padding(.top, 4)
+                            }
+                        } else if let valuePerSkin = game.skinsValuePerSkin, valuePerSkin > 0 {
+                            // Old system display
+                            let totalPot = Double(totalSkins) * valuePerSkin
+                            
+                            HStack {
+                                Text("Value per Skin:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("$\(valuePerSkin, specifier: "%.2f")")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                            }
+                            .padding(.horizontal)
+                            
+                            HStack {
+                                Text("Total Pot Value:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text("$\(totalPot, specifier: "%.2f")")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                            }
+                            .padding(.horizontal)
+                            
+                            Text("Payouts calculated by player-to-player differences")
+                                .font(.caption2)
                                 .foregroundColor(.secondary)
-                            Spacer()
-                            Text("$\(valuePerSkin, specifier: "%.2f")")
-                                .font(.caption)
-                                .fontWeight(.semibold)
+                                .padding(.horizontal)
+                                .padding(.top, 4)
                         }
-                        .padding(.horizontal)
-                        
+                    } else if let potPerPlayer = game.skinsPotPerPlayer, potPerPlayer > 0, let totalPot = game.skinsTotalPot {
+                        // No skins won yet, but pot is set
+                        Divider()
+                            .padding(.horizontal)
                         HStack {
-                            Text("Total Pot Value:")
+                            Text("Total Pot:")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                             Spacer()
@@ -405,7 +477,7 @@ struct SkinsSummaryView: View {
                         }
                         .padding(.horizontal)
                         
-                        Text("Payouts calculated by player-to-player differences")
+                        Text("No skins awarded yet. All players have contributed to the pot.")
                             .font(.caption2)
                             .foregroundColor(.secondary)
                             .padding(.horizontal)

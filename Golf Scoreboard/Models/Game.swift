@@ -28,10 +28,14 @@ final class Game {
     var trackingPlayerIDs_v2: String? // IDs of players who are tracking shots (stored as comma-separated UUID strings)
     // Presses for Nassau format: "matchType:startingHole:initiatingTeam|..." where matchType is "front9", "back9", or "overall"
     var nassauPresses: String? // Presses stored as string for SwiftData compatibility
-    // Value per skin for Skins format
+    // Value per skin for Skins format (deprecated - use skinsPotPerPlayer instead)
     var skinsValuePerSkin: Double? // Amount each skin is worth (stored as optional for backward compatibility)
+    // Pot amount per player for Skins format
+    var skinsPotPerPlayer: Double? // Amount each player contributes to the pot
+    // Whether skins carry over when tied (true) or are lost (false)
+    var skinsCarryoverEnabled: Bool = true // Default to true for backward compatibility
     
-    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil, gameFormat: String = "stroke", teamAssignments: [String: [UUID]]? = nil, skinsValuePerSkin: Double? = nil) {
+    init(course: GolfCourse? = nil, players: [Player] = [], selectedTeeColor: String? = nil, date: Date? = nil, trackingPlayerIDs: [UUID]? = nil, gameFormat: String = "stroke", teamAssignments: [String: [UUID]]? = nil, skinsValuePerSkin: Double? = nil, skinsPotPerPlayer: Double? = nil, skinsCarryoverEnabled: Bool = true) {
         self.id = UUID()
         self.course = course
         self.date = date ?? Date()
@@ -41,6 +45,8 @@ final class Game {
         self.selectedTeeColor = selectedTeeColor
         self.gameFormat = gameFormat
         self.skinsValuePerSkin = skinsValuePerSkin
+        self.skinsPotPerPlayer = skinsPotPerPlayer
+        self.skinsCarryoverEnabled = skinsCarryoverEnabled
         // Convert UUID array to comma-separated string for SwiftData compatibility
         self.trackingPlayerIDs_v2 = trackingPlayerIDs?.map { $0.uuidString }.joined(separator: ",")
         // Convert team assignments to string format: "team1:uuid1,uuid2|team2:uuid3,uuid4"
@@ -879,7 +885,7 @@ final class Game {
             skins[player.id] = 0
         }
         
-        // Track accumulated carryover skins
+        // Track accumulated carryover skins (only if carryover is enabled)
         var accumulatedCarryover = 0
         
         // Count skins won per player
@@ -891,8 +897,15 @@ final class Game {
                 // Reset carryover since it was consumed
                 accumulatedCarryover = 0
             } else {
-                // This hole is tied - add to carryover
-                accumulatedCarryover += 1
+                // This hole is tied
+                if skinsCarryoverEnabled {
+                    // Add to carryover if carryover is enabled
+                    accumulatedCarryover += 1
+                } else {
+                    // If carryover is disabled, tied holes are lost (no skin awarded)
+                    // Just reset carryover (don't accumulate)
+                    accumulatedCarryover = 0
+                }
             }
         }
         
@@ -900,13 +913,10 @@ final class Game {
     }
     
     // Calculate net payouts per player (positive = won money, negative = lost money)
-    // Each player pays each other player: (other player's skins - this player's skins) × value per skin
-    // If the difference is negative, no payment is made (the other player pays instead)
-    // Net payout = sum of what player receives from others - sum of what player pays to others
+    // New system: Pot is divided by number of skins awarded, each player gets payout based on skins won
+    // Old system (backward compatibility): Player-to-player differences based on value per skin
     func skinsPayouts() -> [UUID: Double] {
-        guard gameFormat == "skins",
-              let valuePerSkin = skinsValuePerSkin,
-              valuePerSkin > 0 else {
+        guard gameFormat == "skins" else {
             return [:]
         }
         
@@ -915,22 +925,48 @@ final class Game {
         // Calculate total skins won
         let totalSkinsWon = skins.values.reduce(0, +)
         
-        guard totalSkinsWon > 0 else {
-            // No skins won yet, no payouts
-            var payouts: [UUID: Double] = [:]
-            for player in playersArray {
-                payouts[player.id] = 0.0
-            }
-            return payouts
-        }
-        
         // Initialize payouts to zero
         var payouts: [UUID: Double] = [:]
         for player in playersArray {
             payouts[player.id] = 0.0
         }
         
-        // Calculate player-to-player payments
+        // Use new pot-based system if pot per player is set
+        if let potPerPlayer = skinsPotPerPlayer, potPerPlayer > 0 {
+            let totalPot = Double(playersArray.count) * potPerPlayer
+            
+            guard totalSkinsWon > 0 else {
+                // No skins won yet, all players have paid in but no payouts
+                // Each player has already contributed, so net is -potPerPlayer
+                for player in playersArray {
+                    payouts[player.id] = -potPerPlayer
+                }
+                return payouts
+            }
+            
+            // Calculate value per skin: total pot divided by number of skins
+            let valuePerSkin = totalPot / Double(totalSkinsWon)
+            
+            // Calculate payouts: (skins won × value per skin) - initial contribution
+            for player in playersArray {
+                let playerSkins = skins[player.id] ?? 0
+                let winnings = Double(playerSkins) * valuePerSkin
+                payouts[player.id] = winnings - potPerPlayer
+            }
+            
+            return payouts
+        }
+        
+        // Fallback to old system for backward compatibility
+        guard let valuePerSkin = skinsValuePerSkin, valuePerSkin > 0 else {
+            return payouts
+        }
+        
+        guard totalSkinsWon > 0 else {
+            return payouts
+        }
+        
+        // Calculate player-to-player payments (old system)
         for i in 0..<playersArray.count {
             let player1 = playersArray[i]
             let player1Skins = skins[player1.id] ?? 0
@@ -958,6 +994,34 @@ final class Game {
         }
         
         return payouts
+    }
+    
+    // Get total pot for skins game
+    var skinsTotalPot: Double? {
+        guard gameFormat == "skins",
+              let potPerPlayer = skinsPotPerPlayer,
+              potPerPlayer > 0 else {
+            return nil
+        }
+        return Double(playersArray.count) * potPerPlayer
+    }
+    
+    // Get value per skin (calculated from pot)
+    var skinsCalculatedValuePerSkin: Double? {
+        guard gameFormat == "skins",
+              let totalPot = skinsTotalPot else {
+            // Fallback to old system
+            return skinsValuePerSkin
+        }
+        
+        let skins = skinsPerPlayer()
+        let totalSkinsWon = skins.values.reduce(0, +)
+        
+        guard totalSkinsWon > 0 else {
+            return nil
+        }
+        
+        return totalPot / Double(totalSkinsWon)
     }
 }
 

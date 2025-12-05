@@ -30,7 +30,9 @@ struct GameSetupView: View {
     @State private var team2Name: String = "Team 2"
     @State private var showingTeamValidationAlert = false
     @State private var teamValidationMessage = ""
-    @State private var skinsValuePerSkin: String = ""
+    @State private var skinsValuePerSkin: String = "" // For backward compatibility
+    @State private var skinsPotPerPlayer: String = ""
+    @State private var skinsCarryoverEnabled: Bool = true
     
     private var availableTeeColors: [String] {
         guard let course = selectedCourse else { return [] }
@@ -155,19 +157,26 @@ struct GameSetupView: View {
                     }
                     
                     if selectedGameFormat == "skins" {
-                        Text("Player with lowest net score on each hole wins the skin. If tied, the skin carries over to the next hole. Winner claims all accumulated skins for that hole.")
+                        Text("Player with lowest net score on each hole wins the skin. If tied and carryover is enabled, the skin carries over to the next hole. Winner claims all accumulated skins for that hole.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
                 
-                // Value per skin section for Skins
+                // Pot settings for Skins
                 if selectedGameFormat == "skins" {
-                    Section("Skin Value") {
-                        TextField("Value per skin", text: $skinsValuePerSkin)
+                    Section("Skins Pot") {
+                        TextField("Amount per player", text: $skinsPotPerPlayer)
                             .keyboardType(.decimalPad)
                             .textFieldStyle(.roundedBorder)
-                        Text("Enter the value of each skin (e.g., 5.00 for $5 per skin). Total pot = skins awarded × value per skin.")
+                        Text("Enter the amount each player contributes to the pot (e.g., 20.00 for $20 per player). Total pot will be divided by the number of skins awarded.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Section("Carryover Settings") {
+                        Toggle("Carryover Skins", isOn: $skinsCarryoverEnabled)
+                        Text("When enabled, tied holes carry over to the next hole. When disabled, tied holes are lost (no skin awarded).")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -463,15 +472,23 @@ struct GameSetupView: View {
             return nil
         }()
         
-        // Get skins value per skin if Skins format
+        // Get skins pot per player if Skins format
+        let potPerPlayer: Double? = {
+            if selectedGameFormat == "skins", !skinsPotPerPlayer.isEmpty {
+                return Double(skinsPotPerPlayer)
+            }
+            return nil
+        }()
+        
+        // For backward compatibility, also set valuePerSkin if old field is used
         let valuePerSkin: Double? = {
-            if selectedGameFormat == "skins", !skinsValuePerSkin.isEmpty {
+            if selectedGameFormat == "skins", !skinsValuePerSkin.isEmpty, potPerPlayer == nil {
                 return Double(skinsValuePerSkin)
             }
             return nil
         }()
         
-        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse, trackingPlayerIDs: trackingPlayerIDsArray, gameFormat: selectedGameFormat, teamAssignments: teamAssignments, skinsValuePerSkin: valuePerSkin)
+        let newGame = Game(course: selectedCourse, players: selectedPlayersArray, selectedTeeColor: teeColorToUse, trackingPlayerIDs: trackingPlayerIDsArray, gameFormat: selectedGameFormat, teamAssignments: teamAssignments, skinsValuePerSkin: valuePerSkin, skinsPotPerPlayer: potPerPlayer, skinsCarryoverEnabled: skinsCarryoverEnabled)
         
         // Only one game can be active at a time
         modelContext.insert(newGame)
