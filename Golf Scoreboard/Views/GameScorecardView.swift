@@ -334,12 +334,36 @@ struct ScoreEditorView: View {
     @Bindable var game: Game
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @State private var showingClearConfirmation = false
+    
+    // Check if this hole has any scores
+    private var holeHasScores: Bool {
+        if let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }) {
+            return !holeScore.scores.isEmpty
+        }
+        return false
+    }
     
     var body: some View {
         NavigationView {
             List {
                 ForEach(game.playersArray) { player in
                     ScoreEditorRow(holeNumber: holeNumber, game: game, player: player)
+                }
+                
+                // Clear scores button
+                if holeHasScores {
+                    Section {
+                        Button(role: .destructive) {
+                            showingClearConfirmation = true
+                        } label: {
+                            HStack {
+                                Spacer()
+                                Label("Clear All Scores for Hole \(holeNumber)", systemImage: "trash")
+                                Spacer()
+                            }
+                        }
+                    }
                 }
             }
             .navigationTitle("Hole \(holeNumber)")
@@ -351,7 +375,42 @@ struct ScoreEditorView: View {
                     }
                 }
             }
+            .alert("Clear Scores?", isPresented: $showingClearConfirmation) {
+                Button("Cancel", role: .cancel) { }
+                Button("Clear", role: .destructive) {
+                    clearScoresForHole()
+                }
+            } message: {
+                Text("This will remove all scores for hole \(holeNumber). This cannot be undone.")
+            }
         }
+    }
+    
+    private func clearScoresForHole() {
+        // Find and remove the hole score
+        if let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }) {
+            // Remove all player scores for this hole
+            if let playerScores = holeScore.playerScores {
+                for playerScore in playerScores {
+                    modelContext.delete(playerScore)
+                }
+            }
+            holeScore.playerScores = []
+            
+            // Optionally remove the entire hole score record
+            if let index = game.holesScores?.firstIndex(where: { $0.holeNumber == holeNumber }) {
+                game.holesScores?.remove(at: index)
+                modelContext.delete(holeScore)
+            }
+            
+            try? modelContext.save()
+            
+            // Haptic feedback
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+        }
+        
+        dismiss()
     }
 }
 
@@ -393,6 +452,12 @@ struct ScoreEditorRow: View {
     }
     
     private func saveScore() {
+        // If text is empty, remove the score for this player
+        if scoreText.trimmingCharacters(in: .whitespaces).isEmpty {
+            removeScore()
+            return
+        }
+        
         guard let score = Int(scoreText) else { return }
         
         if let existingHole = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }) {
@@ -417,6 +482,18 @@ struct ScoreEditorRow: View {
             if allPlayersScored && currentHole < 18 {
                 currentHole += 1
             }
+        }
+    }
+    
+    private func removeScore() {
+        guard let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }) else { return }
+        
+        // Find and remove the player's score
+        if let playerScores = holeScore.playerScores,
+           let playerScore = playerScores.first(where: { $0.player?.id == player.id }) {
+            modelContext.delete(playerScore)
+            holeScore.playerScores = playerScores.filter { $0.player?.id != player.id }
+            try? modelContext.save()
         }
     }
 }
