@@ -32,10 +32,12 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
             // Golf scoring terms
             "par", "birdie", "bogey", "eagle", "albatross", "double bogey", "triple bogey",
             "double eagle", "double-bogey", "triple-bogey",
-            // Numbers 1-8 (as words)
-            "one", "two", "three", "four", "five", "six", "seven", "eight",
-            // Numbers 1-8 (as digits - for contextual strings)
-            "1", "2", "3", "4", "5", "6", "7", "8"
+            // Numbers 1-12 (as words)
+            "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+            // Numbers 1-12 (as digits - for contextual strings)
+            "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12",
+            // Trigger words to auto-submit scores
+            "done", "submit", "finished", "enter", "that's it"
         ]
     }
     

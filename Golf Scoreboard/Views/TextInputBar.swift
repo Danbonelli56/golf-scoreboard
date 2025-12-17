@@ -30,7 +30,7 @@ struct TextInputBar: View {
                 }
                 .padding(.leading)
                 
-                TextField("Say or type: 'Hole 5, John, 4'", text: $inputText)
+                TextField("Say: 'Dan 5, Mike 4, done'", text: $inputText)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit {
                         commit()
@@ -50,6 +50,39 @@ struct TextInputBar: View {
             .onChange(of: voiceManager.recognizedText) { _, newValue in
                 // Only mirror speech into the field while actively listening
                 if voiceManager.isListening {
+                    // Check for trigger words to auto-submit
+                    let lowerText = newValue.lowercased()
+                    let triggerWords = ["done", "submit", "finished", "that's it", "enter"]
+                    
+                    for trigger in triggerWords {
+                        if lowerText.hasSuffix(trigger) || lowerText.contains(" \(trigger)") {
+                            // Remove the trigger word from the text
+                            var cleanedText = newValue
+                            // Remove trigger word (case-insensitive)
+                            if let range = cleanedText.range(of: trigger, options: [.caseInsensitive, .backwards]) {
+                                cleanedText.removeSubrange(range)
+                            }
+                            // Clean up extra whitespace
+                            cleanedText = cleanedText.trimmingCharacters(in: .whitespaces)
+                            
+                            // Update input and auto-commit
+                            inputText = cleanedText
+                            
+                            // Small delay to ensure UI updates, then commit
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                if !inputText.isEmpty {
+                                    // Haptic feedback for confirmation
+                                    let generator = UINotificationFeedbackGenerator()
+                                    generator.notificationOccurred(.success)
+                                    
+                                    commit()
+                                }
+                            }
+                            return
+                        }
+                    }
+                    
+                    // No trigger word, just update the text
                     inputText = newValue
                 }
             }

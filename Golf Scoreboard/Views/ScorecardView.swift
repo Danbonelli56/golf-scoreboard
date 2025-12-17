@@ -21,6 +21,10 @@ struct ScorecardView: View {
     @State private var listening = false
     @State private var showingCompleteGameAlert = false
     
+    // Shake to activate voice
+    @State private var micToggleAction: (() -> Void)?
+    @State private var showShakeIndicator = false
+    
     // Filter out completed games and games from previous days
     private var activeGames: [Game] {
         allGames.filter { game in
@@ -112,6 +116,31 @@ struct ScorecardView: View {
                     onToggleListening: nil,
                     playerNames: selectedGame?.playersArray.map { $0.name } ?? []
                 )
+                .onPreferenceChange(MicToggleKey.self) { handler in
+                    micToggleAction = handler?.action
+                }
+            }
+            // Shake indicator overlay
+            .overlay {
+                if showShakeIndicator {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Image(systemName: listening ? "mic.fill" : "mic")
+                                .font(.system(size: 40))
+                            Text(listening ? "Listening..." : "Voice Activated!")
+                                .font(.headline)
+                        }
+                        .foregroundColor(.white)
+                        .padding(20)
+                        .background(listening ? Color.red : Color.green)
+                        .cornerRadius(16)
+                        .shadow(radius: 10)
+                        Spacer()
+                    }
+                    .transition(.scale.combined(with: .opacity))
+                    .zIndex(100)
+                }
             }
             .navigationTitle("Scorecard")
             .toolbar {
@@ -182,6 +211,29 @@ struct ScorecardView: View {
             .onAppear {
                 // Archive expired games when view appears
                 archiveExpiredGames()
+            }
+            .onShake {
+                // Only activate if there's an active game
+                guard selectedGame != nil else { return }
+                
+                // Show visual indicator
+                withAnimation(.spring(response: 0.3)) {
+                    showShakeIndicator = true
+                }
+                
+                // Trigger mic toggle
+                micToggleAction?()
+                
+                // Haptic feedback
+                let generator = UIImpactFeedbackGenerator(style: .medium)
+                generator.impactOccurred()
+                
+                // Hide indicator after delay
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        showShakeIndicator = false
+                    }
+                }
             }
         }
     }
