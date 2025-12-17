@@ -11,6 +11,33 @@ import SwiftData
 struct StablefordScorecardView: View {
     @Bindable var game: Game
     @Environment(\.modelContext) private var modelContext
+    @State private var isEditMode = false
+    @State private var showingScoreEditor = false
+    @State private var selectedHoleNumber: Int = 1
+    
+    private func findFirstEmptyHole() -> Int? {
+        let players = game.playersArray
+        guard !players.isEmpty else { return 1 }
+        
+        for holeNumber in 1...18 {
+            let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber })
+            
+            guard let holeScore = holeScore else {
+                return holeNumber
+            }
+            
+            let scores = holeScore.scores
+            let allPlayersHaveScores = players.allSatisfy { player in
+                scores[player.id] != nil
+            }
+            
+            if !allPlayersHaveScores {
+                return holeNumber
+            }
+        }
+        
+        return nil
+    }
     
     // Helper to extract first name
     func firstName(from fullName: String) -> String {
@@ -60,9 +87,24 @@ struct StablefordScorecardView: View {
                         Text(game.course?.name ?? "Unknown Course")
                             .font(.headline)
                         Spacer()
+                        
+                        Button {
+                            isEditMode.toggle()
+                        } label: {
+                            Text(isEditMode ? "Done" : "Edit")
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    
+                    HStack {
                         Text(game.date, format: .dateTime)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        Spacer()
+                        Text(isEditMode ? "Tap any hole to edit" : "Tap to enter next score")
+                            .font(.caption2)
+                            .foregroundColor(isEditMode ? .blue : .secondary)
                     }
                     
                     // Tee color display
@@ -132,7 +174,16 @@ struct StablefordScorecardView: View {
                     
                     // Hole rows
                     ForEach(1...18, id: \.self) { holeNum in
-                        StablefordHoleRow(holeNumber: holeNum, game: game, course: game.course)
+                        StablefordHoleRow(
+                            holeNumber: holeNum,
+                            game: game,
+                            course: game.course,
+                            isEditMode: isEditMode,
+                            onTap: {
+                                selectedHoleNumber = isEditMode ? holeNum : (findFirstEmptyHole() ?? holeNum)
+                                showingScoreEditor = true
+                            }
+                        )
                     }
                     
                     // Total rows
@@ -149,6 +200,9 @@ struct StablefordScorecardView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingScoreEditor) {
+            ScoreEditorView(holeNumber: selectedHoleNumber, game: game)
+        }
     }
 }
 
@@ -156,7 +210,8 @@ struct StablefordHoleRow: View {
     let holeNumber: Int
     @Bindable var game: Game
     let course: GolfCourse?
-    @State private var showingScoreEditor = false
+    let isEditMode: Bool
+    let onTap: () -> Void
     
     var body: some View {
         HStack(spacing: 0) {
@@ -221,16 +276,14 @@ struct StablefordHoleRow: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .onTapGesture {
-                    showingScoreEditor = true
-                }
             }
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 4)
         .background(holeNumber % 2 == 0 ? Color.clear : Color(.secondarySystemBackground).opacity(0.3))
-        .sheet(isPresented: $showingScoreEditor) {
-            ScoreEditorView(holeNumber: holeNumber, game: game)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
         }
     }
     

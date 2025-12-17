@@ -11,6 +11,34 @@ import SwiftData
 struct SkinsScorecardView: View {
     @Bindable var game: Game
     @Environment(\.modelContext) private var modelContext
+    @State private var isEditMode = false
+    @State private var showingScoreEditor = false
+    @State private var selectedHoleNumber: Int = 1
+    
+    // Find the first hole that doesn't have scores for all players
+    private func findFirstEmptyHole() -> Int? {
+        let players = game.playersArray
+        guard !players.isEmpty else { return 1 }
+        
+        for holeNumber in 1...18 {
+            let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber })
+            
+            guard let holeScore = holeScore else {
+                return holeNumber
+            }
+            
+            let scores = holeScore.scores
+            let allPlayersHaveScores = players.allSatisfy { player in
+                scores[player.id] != nil
+            }
+            
+            if !allPlayersHaveScores {
+                return holeNumber
+            }
+        }
+        
+        return nil
+    }
     
     // Helper to extract first name
     func firstName(from fullName: String) -> String {
@@ -54,9 +82,31 @@ struct SkinsScorecardView: View {
                         Text(game.course?.name ?? "Unknown Course")
                             .font(.headline)
                         Spacer()
+                        
+                        // Edit mode toggle
+                        Button {
+                            isEditMode.toggle()
+                        } label: {
+                            Text(isEditMode ? "Done" : "Edit")
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    
+                    HStack {
                         Text(game.date, format: .dateTime)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        Spacer()
+                        if !isEditMode {
+                            Text("Tap to enter next score")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Tap any hole to edit")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
                     }
                     
                     // Tee color display
@@ -146,7 +196,20 @@ struct SkinsScorecardView: View {
                     
                     // Hole rows
                     ForEach(1...18, id: \.self) { holeNum in
-                        SkinsHoleScoreRow(holeNumber: holeNum, game: game, course: game.course)
+                        SkinsHoleScoreRow(
+                            holeNumber: holeNum,
+                            game: game,
+                            course: game.course,
+                            isEditMode: isEditMode,
+                            onTap: {
+                                if isEditMode {
+                                    selectedHoleNumber = holeNum
+                                } else {
+                                    selectedHoleNumber = findFirstEmptyHole() ?? holeNum
+                                }
+                                showingScoreEditor = true
+                            }
+                        )
                     }
                     
                     // Total rows
@@ -163,6 +226,9 @@ struct SkinsScorecardView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingScoreEditor) {
+            ScoreEditorView(holeNumber: selectedHoleNumber, game: game)
+        }
     }
 }
 
@@ -170,7 +236,8 @@ struct SkinsHoleScoreRow: View {
     let holeNumber: Int
     @Bindable var game: Game
     let course: GolfCourse?
-    @State private var showingScoreEditor = false
+    let isEditMode: Bool
+    let onTap: () -> Void
     
     var body: some View {
         HStack(spacing: 0) {
@@ -235,16 +302,14 @@ struct SkinsHoleScoreRow: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .onTapGesture {
-                    showingScoreEditor = true
-                }
             }
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 4)
         .background(holeNumber % 2 == 0 ? Color.clear : Color(.secondarySystemBackground).opacity(0.3))
-        .sheet(isPresented: $showingScoreEditor) {
-            ScoreEditorView(holeNumber: holeNumber, game: game)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
         }
     }
     

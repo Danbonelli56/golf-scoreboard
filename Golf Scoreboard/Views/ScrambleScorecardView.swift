@@ -11,6 +11,20 @@ import SwiftData
 struct ScrambleScorecardView: View {
     @Bindable var game: Game
     @Environment(\.modelContext) private var modelContext
+    @State private var isEditMode = false
+    @State private var showingScoreEditor = false
+    @State private var selectedHoleNumber: Int = 1
+    
+    private func findFirstEmptyHole() -> Int? {
+        for holeNumber in 1...18 {
+            let team1Score = game.scrambleScoreForTeam(game.teamNames.first ?? "", holeNumber: holeNumber)
+            let team2Score = game.scrambleScoreForTeam(game.teamNames.last ?? "", holeNumber: holeNumber)
+            if team1Score == nil || team2Score == nil {
+                return holeNumber
+            }
+        }
+        return nil
+    }
     
     var body: some View {
         ScrollView {
@@ -21,9 +35,24 @@ struct ScrambleScorecardView: View {
                         Text(game.course?.name ?? "Unknown Course")
                             .font(.headline)
                         Spacer()
+                        
+                        Button {
+                            isEditMode.toggle()
+                        } label: {
+                            Text(isEditMode ? "Done" : "Edit")
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    
+                    HStack {
                         Text(game.date, format: .dateTime)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                        Spacer()
+                        Text(isEditMode ? "Tap any hole to edit" : "Tap to enter next score")
+                            .font(.caption2)
+                            .foregroundColor(isEditMode ? .blue : .secondary)
                     }
                     
                     // Tee color display
@@ -119,7 +148,18 @@ struct ScrambleScorecardView: View {
                     
                     // Hole rows
                     ForEach(1...18, id: \.self) { holeNum in
-                        ScrambleHoleRow(holeNumber: holeNum, game: game, course: game.course, team1Name: team1Name, team2Name: team2Name)
+                        ScrambleHoleRow(
+                            holeNumber: holeNum,
+                            game: game,
+                            course: game.course,
+                            team1Name: team1Name,
+                            team2Name: team2Name,
+                            isEditMode: isEditMode,
+                            onTap: {
+                                selectedHoleNumber = isEditMode ? holeNum : (findFirstEmptyHole() ?? holeNum)
+                                showingScoreEditor = true
+                            }
+                        )
                     }
                     
                     // Total rows
@@ -136,6 +176,9 @@ struct ScrambleScorecardView: View {
                 }
             }
         }
+        .sheet(isPresented: $showingScoreEditor) {
+            ScrambleScoreEditorView(holeNumber: selectedHoleNumber, game: game, team1Name: game.teamNames.first ?? "Team 1", team2Name: game.teamNames.last ?? "Team 2")
+        }
     }
 }
 
@@ -145,7 +188,8 @@ struct ScrambleHoleRow: View {
     let course: GolfCourse?
     let team1Name: String
     let team2Name: String
-    @State private var showingScoreEditor = false
+    let isEditMode: Bool
+    let onTap: () -> Void
     
     var body: some View {
         HStack(spacing: 0) {
@@ -189,9 +233,6 @@ struct ScrambleHoleRow: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .onTapGesture {
-                showingScoreEditor = true
-            }
             
             // Team 2 score
             VStack(spacing: 2) {
@@ -215,15 +256,13 @@ struct ScrambleHoleRow: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            .onTapGesture {
-                showingScoreEditor = true
-            }
         }
         .padding(.vertical, 4)
         .padding(.horizontal, 4)
         .background(holeNumber % 2 == 0 ? Color.clear : Color(.secondarySystemBackground).opacity(0.3))
-        .sheet(isPresented: $showingScoreEditor) {
-            ScrambleScoreEditorView(holeNumber: holeNumber, game: game, team1Name: team1Name, team2Name: team2Name)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTap()
         }
     }
     
