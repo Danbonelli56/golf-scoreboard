@@ -37,7 +37,9 @@ class VoiceRecognitionManager: NSObject, ObservableObject {
             // Numbers 1-12 (as digits - for contextual strings)
             "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12",
             // Trigger words to auto-submit scores
-            "done", "submit", "finished", "enter", "that's it"
+            "done", "submit", "finished", "enter", "that's it",
+            // Command words (including common misheard variations)
+            "clear", "hole", "whole", "hold", "delete", "remove"
         ]
     }
     

@@ -243,6 +243,19 @@ struct ScorecardView: View {
         
         let lowerText = inputText.lowercased()
         
+        // Check for "clear hole X" command first
+        // Also handles "whole" and "hold" which speech recognition often uses instead of "hole"
+        let hasClearKeyword = lowerText.contains("clear") || lowerText.contains("delete") || lowerText.contains("remove")
+        let hasHoleKeyword = lowerText.contains("hole") || lowerText.contains("whole") || lowerText.contains("hold")
+        
+        if hasClearKeyword && hasHoleKeyword {
+            if let holeNumber = extractHoleNumber(from: lowerText) {
+                clearScoresForHole(holeNumber)
+                inputText = ""
+                return
+            }
+        }
+        
         // If no game selected, try to create one from the input
         if selectedGame == nil {
             // Check if input has patterns that indicate game creation
@@ -605,6 +618,71 @@ struct ScorecardView: View {
         }
         // Then try parsing as written number
         return parseNumberWord(text)
+    }
+    
+    // Extract hole number from text like "clear hole 5" or "clear hole five"
+    // Also handles "whole" which speech recognition often uses instead of "hole"
+    private func extractHoleNumber(from text: String) -> Int? {
+        let lowerText = text.lowercased()
+        
+        // Look for "hole" or "whole" followed by a number
+        let holeKeywords = ["hole", "whole", "hold"]
+        
+        for keyword in holeKeywords {
+            if let holeRange = lowerText.range(of: keyword) {
+                let afterHole = String(lowerText[holeRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+                let words = afterHole.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                
+                if let firstWord = words.first {
+                    // Try numeric first
+                    if let num = Int(firstWord), num >= 1, num <= 18 {
+                        return num
+                    }
+                    // Try word number
+                    if let num = parseNumberWord(firstWord), num >= 1, num <= 18 {
+                        return num
+                    }
+                }
+            }
+        }
+        
+        return nil
+    }
+    
+    // Clear all scores for a specific hole via voice command
+    private func clearScoresForHole(_ holeNumber: Int) {
+        guard let game = selectedGame else {
+            print("⚠️ No game selected to clear scores")
+            return
+        }
+        
+        // Find the hole score
+        guard let holeScore = game.holesScoresArray.first(where: { $0.holeNumber == holeNumber }) else {
+            print("ℹ️ No scores found for hole \(holeNumber)")
+            return
+        }
+        
+        // Remove all player scores for this hole
+        if let playerScores = holeScore.playerScores {
+            for playerScore in playerScores {
+                modelContext.delete(playerScore)
+            }
+        }
+        holeScore.playerScores = []
+        
+        // Remove the hole score record
+        if let index = game.holesScores?.firstIndex(where: { $0.holeNumber == holeNumber }) {
+            game.holesScores?.remove(at: index)
+            modelContext.delete(holeScore)
+        }
+        
+        try? modelContext.save()
+        
+        // Haptic and audio feedback
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+        
+        print("✅ Cleared scores for hole \(holeNumber)")
     }
     
     private func parseAndUpdateScores(text: String) {
