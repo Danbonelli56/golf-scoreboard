@@ -14,6 +14,7 @@ struct BestBallScorecardView: View {
     @State private var isEditMode = false
     @State private var showingScoreEditor = false
     @State private var selectedHoleNumber: Int = 1
+    @State private var showingPressSheet = false
     
     private func findFirstEmptyHole() -> Int? {
         let players = game.playersArray
@@ -302,6 +303,28 @@ struct BestBallScorecardView: View {
                         // Match play summary
                         Divider()
                         BestBallMatchPlaySummaryRow(game: game, team1Name: team1Name, team2Name: team2Name)
+                        
+                        // Presses section (only for match play)
+                        if !game.bestBallPresses.isEmpty {
+                            Divider()
+                            BestBallPressesRow(game: game, team1Name: team1Name, team2Name: team2Name)
+                        }
+                        
+                        // Add Press button
+                        Divider()
+                        Button(action: {
+                            showingPressSheet = true
+                        }) {
+                            HStack {
+                                Image(systemName: "plus.circle")
+                                Text("Add Press")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(game.bestBallMatchPlayLosingTeam() == nil || game.bestBallMatchPlayNextHole() == nil)
+                        .padding()
                     }
                 }
                 }
@@ -309,6 +332,9 @@ struct BestBallScorecardView: View {
         }
         .sheet(isPresented: $showingScoreEditor) {
             ScoreEditorView(holeNumber: selectedHoleNumber, game: game)
+        }
+        .sheet(isPresented: $showingPressSheet) {
+            BestBallPressSheet(game: game)
         }
     }
 }
@@ -692,6 +718,110 @@ struct BestBallMatchPlaySummaryRow: View {
             .padding(.horizontal)
         }
         .padding(.bottom, 8)
+    }
+}
+
+struct BestBallPressesRow: View {
+    @Bindable var game: Game
+    let team1Name: String
+    let team2Name: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Presses")
+                .font(.headline)
+                .padding(.horizontal)
+                .padding(.top, 8)
+            
+            ForEach(Array(game.bestBallPresses.enumerated()), id: \.offset) { index, press in
+                let pressStatus = game.bestBallPressMatchStatus(press: press)
+                
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Press #\(index + 1) (Hole \(press.startingHole))")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        Text("Initiated by: \(press.initiatingTeam)")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(pressStatus.status)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    if pressStatus.team1HolesUp > 0 {
+                        Text("\(team1Name) +\(pressStatus.team1HolesUp)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                    } else if pressStatus.team2HolesUp > 0 {
+                        Text("\(team2Name) +\(pressStatus.team2HolesUp)")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                    } else {
+                        Text("All Square")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 4)
+            }
+        }
+        .padding(.bottom, 8)
+    }
+}
+
+struct BestBallPressSheet: View {
+    @Bindable var game: Game
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                if let losingTeam = game.bestBallMatchPlayLosingTeam(),
+                   let nextHole = game.bestBallMatchPlayNextHole() {
+                    Section {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("\(losingTeam.teamName) is \(losingTeam.holesDown) down")
+                                .font(.headline)
+                            Text("Press will start on hole \(nextHole)")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    Section {
+                        Button(action: {
+                            game.addBestBallPress(startingHole: nextHole, initiatingTeam: losingTeam.teamName)
+                            dismiss()
+                        }) {
+                            HStack {
+                                Spacer()
+                                Text("Press")
+                                    .fontWeight(.semibold)
+                                Spacer()
+                            }
+                        }
+                    }
+                } else {
+                    Section {
+                        Text("No press available. A press can only be initiated by the team that is losing in the match.")
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Add Press")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 

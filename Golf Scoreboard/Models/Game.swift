@@ -28,6 +28,8 @@ final class Game {
     var trackingPlayerIDs_v2: String? // IDs of players who are tracking shots (stored as comma-separated UUID strings)
     // Presses for Nassau format: "matchType:startingHole:initiatingTeam|..." where matchType is "front9", "back9", or "overall"
     var nassauPresses: String? // Presses stored as string for SwiftData compatibility
+    // Presses for Best Ball Match Play format: "startingHole:initiatingTeam|..."
+    var bestBallMatchPlayPresses: String? // Presses stored as string for SwiftData compatibility
     // Value per skin for Skins format (deprecated - use skinsPotPerPlayer instead)
     var skinsValuePerSkin: Double? // Amount each skin is worth (stored as optional for backward compatibility)
     // Pot amount per player for Skins format
@@ -475,6 +477,151 @@ final class Game {
         }
         
         // Match is all square, no one can press
+        return nil
+    }
+    
+    // MARK: - Best Ball Match Play Presses
+    
+    // Parse presses from string format for Best Ball Match Play
+    var bestBallPresses: [(startingHole: Int, initiatingTeam: String)] {
+        guard let pressesString = bestBallMatchPlayPresses, !pressesString.isEmpty else {
+            return []
+        }
+        
+        var result: [(startingHole: Int, initiatingTeam: String)] = []
+        let pressStrings = pressesString.split(separator: "|")
+        
+        for pressString in pressStrings {
+            let parts = pressString.split(separator: ":")
+            if parts.count == 2,
+               let startingHole = Int(parts[0]) {
+                result.append((
+                    startingHole: startingHole,
+                    initiatingTeam: String(parts[1])
+                ))
+            }
+        }
+        
+        return result
+    }
+    
+    // Add a press for Best Ball Match Play
+    func addBestBallPress(startingHole: Int, initiatingTeam: String) {
+        let pressString = "\(startingHole):\(initiatingTeam)"
+        if let existing = bestBallMatchPlayPresses, !existing.isEmpty {
+            bestBallMatchPlayPresses = "\(existing)|\(pressString)"
+        } else {
+            bestBallMatchPlayPresses = pressString
+        }
+    }
+    
+    // Calculate press match status for Best Ball Match Play (from starting hole to 18)
+    func bestBallPressMatchStatus(press: (startingHole: Int, initiatingTeam: String)) -> (team1HolesUp: Int, team2HolesUp: Int, holesRemaining: Int, status: String) {
+        guard gameFormat == "bestball_matchplay", teamNames.count == 2 else {
+            return (0, 0, 0, "Not a Best Ball Match Play game")
+        }
+        
+        let team1Name = teamNames[0]
+        let team2Name = teamNames[1]
+        
+        // Press runs from starting hole to hole 18
+        let holeRange = press.startingHole...18
+        
+        var team1Wins = 0
+        var team2Wins = 0
+        var holesPlayed = 0
+        
+        for holeNumber in holeRange {
+            let team1HasScore = bestBallNetScoreForTeam(team1Name, holeNumber: holeNumber) != nil
+            let team2HasScore = bestBallNetScoreForTeam(team2Name, holeNumber: holeNumber) != nil
+            
+            if team1HasScore && team2HasScore {
+                holesPlayed += 1
+                
+                if let winner = matchPlayHoleWinner(holeNumber: holeNumber) {
+                    if winner == team1Name {
+                        team1Wins += 1
+                    } else if winner == team2Name {
+                        team2Wins += 1
+                    }
+                }
+            }
+        }
+        
+        let holesRemaining = holeRange.count - holesPlayed
+        let team1Up = team1Wins - team2Wins
+        let team2Up = team2Wins - team1Wins
+        
+        var status: String
+        if team1Up > 0 {
+            if holesRemaining > 0 && team1Up > holesRemaining {
+                status = "\(team1Name) wins \(team1Up) up"
+            } else if holesRemaining > 0 {
+                status = "\(team1Name) \(team1Up) up with \(holesRemaining) to play"
+            } else {
+                status = "\(team1Name) wins \(team1Up) up"
+            }
+        } else if team2Up > 0 {
+            if holesRemaining > 0 && team2Up > holesRemaining {
+                status = "\(team2Name) wins \(team2Up) up"
+            } else if holesRemaining > 0 {
+                status = "\(team2Name) \(team2Up) up with \(holesRemaining) to play"
+            } else {
+                status = "\(team2Name) wins \(team2Up) up"
+            }
+        } else {
+            if holesRemaining > 0 {
+                status = "All square with \(holesRemaining) to play"
+            } else {
+                status = "Match halved"
+            }
+        }
+        
+        return (team1Up, team2Up, holesRemaining, status)
+    }
+    
+    // Get the losing team in best ball match play (for press initiation)
+    func bestBallMatchPlayLosingTeam() -> (teamName: String, holesDown: Int)? {
+        guard gameFormat == "bestball_matchplay", teamNames.count == 2 else {
+            return nil
+        }
+        
+        let status = matchPlayStatus
+        let team1Name = teamNames[0]
+        let team2Name = teamNames[1]
+        
+        // If team2 is up, team1 is losing
+        if status.team2HolesUp > 0 {
+            return (teamName: team1Name, holesDown: status.team2HolesUp)
+        }
+        // If team1 is up, team2 is losing
+        else if status.team1HolesUp > 0 {
+            return (teamName: team2Name, holesDown: status.team1HolesUp)
+        }
+        
+        // Match is all square, no one can press
+        return nil
+    }
+    
+    // Get the next unplayed hole in best ball match play
+    func bestBallMatchPlayNextHole() -> Int? {
+        guard gameFormat == "bestball_matchplay", teamNames.count == 2 else {
+            return nil
+        }
+        
+        let team1Name = teamNames[0]
+        let team2Name = teamNames[1]
+        
+        // Find the first hole where both teams don't have scores
+        for holeNumber in 1...18 {
+            let team1HasScore = bestBallNetScoreForTeam(team1Name, holeNumber: holeNumber) != nil
+            let team2HasScore = bestBallNetScoreForTeam(team2Name, holeNumber: holeNumber) != nil
+            if !team1HasScore || !team2HasScore {
+                return holeNumber
+            }
+        }
+        
+        // All holes have been played
         return nil
     }
     
